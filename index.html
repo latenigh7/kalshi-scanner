@@ -95,6 +95,35 @@
     padding: 8px 10px; color: var(--text-primary); font-family: var(--font-mono); font-size: 12px;
   }
   .key-panel .note { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); margin-top: 6px; }
+  .sort-row { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+  .sort-row .sort-label { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.5px; }
+  .sort-btn { padding: 6px 12px; font-size: 11px; }
+  .sort-btn.active { background: var(--surface-raised); color: var(--text-primary); border-color: var(--border-light); }
+  .sort-btn:not(.active) { color: var(--text-faint); }
+  .top-picks { margin-bottom: 22px; }
+  .top-picks-header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; }
+  .top-picks-header .eyebrow { margin-bottom: 0; }
+  .pick-card {
+    background: linear-gradient(180deg, var(--surface-raised), var(--surface));
+    border: 1px solid var(--border-light); border-radius: 10px;
+    padding: 14px 16px; margin-bottom: 10px; position: relative; overflow: hidden;
+  }
+  .pick-rank {
+    position: absolute; top: 0; left: 0; font-family: var(--font-mono); font-size: 34px; font-weight: 600;
+    color: var(--text-primary); opacity: 0.06; line-height: 1; padding: 6px 10px;
+  }
+  .pick-score-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+  .pick-score { font-family: var(--font-mono); font-size: 20px; font-weight: 600; }
+  .pick-title { font-family: var(--font-display); font-size: 14.5px; margin: 2px 0 6px; line-height: 1.35; }
+  .pick-meta { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); }
+  .pick-why { font-family: var(--font-display); font-size: 13px; line-height: 1.45; color: var(--text-secondary); margin-top: 6px; }
+  .batch-row { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+  .batch-progress { font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); }
+  .card.has-edge { border-color: var(--green); }
+  .card-rank-badge {
+    display: inline-block; font-family: var(--font-mono); font-size: 10px; font-weight: 600;
+    background: var(--green); color: var(--bg); border-radius: 4px; padding: 1px 6px; margin-right: 8px;
+  }
 </style>
 </head>
 <body>
@@ -121,8 +150,21 @@
     <button class="filter-btn" data-filter="econ">econ</button>
   </div>
 
+  <div class="batch-row" id="batchRow" style="display:none;">
+    <button id="researchAllBtn">research all visible →</button>
+    <span class="batch-progress" id="batchProgress"></span>
+  </div>
+
+  <div class="sort-row" id="sortRow" style="display:none;">
+    <span class="sort-label">sort:</span>
+    <button class="sort-btn active" data-sort="closing">closing soon</button>
+    <button class="sort-btn" data-sort="volume">highest volume</button>
+    <button class="sort-btn" data-sort="edge">best edge</button>
+  </div>
+
   <div class="status" id="statusLine"></div>
   <div class="error-box" id="errorBox" style="display:none;"></div>
+  <div class="top-picks" id="topPicks"></div>
   <div id="cardList"></div>
 </div>
 
@@ -148,7 +190,16 @@ const DEMO_CANDIDATES = [
     markets:[{label:"No change",price:78,volume:2100000},{label:"25bp cut",price:20,volume:900000},{label:"25bp hike",price:2,volume:40000}] },
 ];
 
-let state = { candidates: [], filter: "all", analysis: {} };
+let state = { candidates: [], filter: "all", analysis: {}, sortMode: "closing" };
+
+const CONFIDENCE_WEIGHT = { high: 1, medium: 0.65, low: 0.35 };
+
+function computeScore(result){
+  if (!result) return null;
+  const edge = Math.abs(result.edge_pct ?? (result.model_probability_pct - result.market_price_pct) ?? 0);
+  const weight = CONFIDENCE_WEIGHT[result.confidence] ?? 0.5;
+  return Math.round(edge * weight * 10) / 10;
+}
 
 function getPrice(m){
   for (const f of ["yes_bid_dollars","last_price_dollars","yes_ask_dollars"]){
@@ -268,17 +319,83 @@ function resultHtml(c, r){
     </div>`;
 }
 
+function renderTopPicks(){
+  const container = document.getElementById("topPicks");
+  const scored = state.candidates
+    .map(c => ({ c, r: state.analysis[c.event_ticker]?.data, score: computeScore(state.analysis[c.event_ticker]?.data) }))
+    .filter(x => x.r && x.score !== null && x.r.verdict === "possible_mispricing")
+    .sort((a,b) => b.score - a.score)
+    .slice(0,3);
+
+  if (scored.length === 0){
+    container.innerHTML = "";
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="top-picks-header">
+      <span class="eyebrow">top picks</span>
+      <span class="pick-meta">ranked by edge × confidence</span>
+    </div>
+    ${scored.map((x,i) => {
+      const barColor = x.r.model_probability_pct >= x.r.market_price_pct ? "var(--green)" : "var(--red)";
+      return `
+      <div class="pick-card">
+        <div class="pick-rank">#${i+1}</div>
+        <div class="pick-score-row">
+          <span class="pick-score" style="color:${barColor}">score ${x.score}</span>
+          <span class="pick-meta">${x.r.confidence} confidence</span>
+        </div>
+        <div class="pick-title">${x.c.title}</div>
+        <div class="pick-meta">market ${x.r.market_price_pct}% vs model ${x.r.model_probability_pct}%</div>
+        <div class="pick-why">${x.r.assessment || ""}</div>
+      </div>`;
+    }).join("")}
+  `;
+}
+
 function renderList(){
   const container = document.getElementById("cardList");
-  const visible = state.candidates.filter(c => state.filter === "all" || c.focus === state.filter);
+  let visible = state.candidates.filter(c => state.filter === "all" || c.focus === state.filter);
+
+  const sortRow = document.getElementById("sortRow");
+  const batchRow = document.getElementById("batchRow");
+  sortRow.style.display = state.candidates.length ? "flex" : "none";
+  batchRow.style.display = state.candidates.length ? "flex" : "none";
+
+  if (state.sortMode === "volume"){
+    visible = [...visible].sort((a,b) => (b.markets[0]?.volume||0) - (a.markets[0]?.volume||0));
+  } else if (state.sortMode === "edge"){
+    visible = [...visible].sort((a,b) => {
+      const sa = computeScore(state.analysis[a.event_ticker]?.data);
+      const sb = computeScore(state.analysis[b.event_ticker]?.data);
+      if (sa === null && sb === null) return 0;
+      if (sa === null) return 1;
+      if (sb === null) return -1;
+      return sb - sa;
+    });
+  } else {
+    visible = [...visible].sort((a,b) => new Date(a.close_time||0) - new Date(b.close_time||0));
+  }
+
+  renderTopPicks();
+
   if (visible.length === 0){
     container.innerHTML = `<div class="empty-state">No candidates yet — scan live markets or view demo data above.</div>`;
     return;
   }
+
+  // figure out edge-sort rank for badge display (only meaningful in edge mode)
+  const edgeRanked = state.sortMode === "edge"
+    ? visible.filter(c => state.analysis[c.event_ticker]?.data && state.analysis[c.event_ticker].data.verdict === "possible_mispricing")
+    : [];
+
   container.innerHTML = visible.map(c => {
     const a = state.analysis[c.event_ticker] || {};
+    const rankIdx = edgeRanked.indexOf(c);
+    const hasEdge = a.data && a.data.verdict === "possible_mispricing";
     let inner = `
-      <div class="tag">${c.category} · closes ${timeUntil(c.close_time)}</div>
+      <div class="tag">${rankIdx > -1 ? `<span class="card-rank-badge">#${rankIdx+1}</span>` : ""}${c.category} · closes ${timeUntil(c.close_time)}</div>
       <div class="title">${c.title}</div>
       ${bucketRowsHtml(c)}`;
     if (!a.data){
@@ -290,7 +407,7 @@ function renderList(){
     if (a.data){
       inner += resultHtml(c, a.data);
     }
-    return `<div class="card">${inner}</div>`;
+    return `<div class="card${hasEdge ? " has-edge" : ""}">${inner}</div>`;
   }).join("");
 
   container.querySelectorAll(".research-btn").forEach(btn=>{
@@ -370,6 +487,42 @@ document.querySelectorAll(".filter-btn").forEach(btn=>{
     state.filter = btn.dataset.filter;
     renderList();
   });
+});
+document.querySelectorAll(".sort-btn").forEach(btn=>{
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".sort-btn").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
+    state.sortMode = btn.dataset.sort;
+    renderList();
+  });
+});
+
+document.getElementById("researchAllBtn").addEventListener("click", async () => {
+  const apiKey = document.getElementById("apiKeyInput").value.trim();
+  if (!apiKey){
+    document.getElementById("keyPanel").classList.add("visible");
+    alert("Set your Anthropic API key first (panel just opened above).");
+    return;
+  }
+  const visible = state.candidates.filter(c => state.filter === "all" || c.focus === state.filter);
+  const toRun = visible.filter(c => !state.analysis[c.event_ticker]?.data);
+  if (toRun.length === 0) return;
+  if (!confirm(`This will run ${toRun.length} separate research calls against your Anthropic API key, each with a small cost. Continue?`)) return;
+
+  const btn = document.getElementById("researchAllBtn");
+  const progress = document.getElementById("batchProgress");
+  btn.disabled = true;
+  for (let i = 0; i < toRun.length; i++){
+    progress.textContent = `researching ${i+1} of ${toRun.length}…`;
+    await analyzeCandidate(toRun[i].event_ticker);
+  }
+  progress.textContent = `done — researched ${toRun.length} markets`;
+  btn.disabled = false;
+  // auto-switch to edge sort so results surface immediately
+  document.querySelectorAll(".sort-btn").forEach(b=>b.classList.remove("active"));
+  document.querySelector('.sort-btn[data-sort="edge"]').classList.add("active");
+  state.sortMode = "edge";
+  renderList();
 });
 
 renderList();

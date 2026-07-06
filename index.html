@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kalshi Research Scanner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0B0D10;
+    --surface: #14171B;
+    --surface-raised: #191D22;
+    --border: #242A31;
+    --border-light: #2E3540;
+    --text-primary: #ECEAE4;
+    --text-secondary: #8B929B;
+    --text-faint: #565D66;
+    --green: #3FC98A;
+    --red: #E2725B;
+    --amber: #E0B454;
+    --wash: #0F1215;
+    --font-display: 'Space Grotesk', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: var(--font-display);
+    padding: 22px 16px 60px;
+  }
+  .wrap { max-width: 620px; margin: 0 auto; }
+  .eyebrow {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 1px;
+    color: var(--text-faint); text-transform: uppercase; margin-bottom: 6px;
+  }
+  h1 { font-size: 25px; margin: 0 0 10px; font-weight: 600; letter-spacing: -0.3px; }
+  .disclaimer {
+    background: var(--surface-raised); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 12px; font-family: var(--font-mono); font-size: 11.5px; color: var(--text-secondary);
+    line-height: 1.5; margin-bottom: 18px;
+  }
+  .controls { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; }
+  button {
+    font-family: var(--font-mono); font-size: 12px; border-radius: 7px; cursor: pointer;
+    padding: 9px 16px; border: 1px solid var(--border-light); background: transparent; color: var(--text-primary);
+  }
+  button.primary { background: var(--text-primary); color: var(--bg); border: none; font-weight: 500; }
+  button:disabled { color: var(--text-faint); cursor: default; }
+  .filter-btn.active { background: var(--surface-raised); color: var(--text-primary); border-color: var(--border-light); }
+  .filter-btn { background: transparent; color: var(--text-faint); border-color: var(--border); }
+  .status { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); margin-bottom: 10px; }
+  .error-box {
+    background: rgba(226,114,91,0.08); border: 1px solid var(--red); border-radius: 8px;
+    padding: 12px 14px; font-family: var(--font-mono); font-size: 12px; color: var(--red);
+    line-height: 1.5; margin-bottom: 16px; white-space: pre-wrap;
+  }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 16px 14px; margin-bottom: 12px;
+  }
+  .card .tag { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.6px; color: var(--text-faint); text-transform: uppercase; }
+  .card .title { font-family: var(--font-display); font-size: 16px; margin-top: 3px; line-height: 1.3; }
+  .bucket-row { display: flex; align-items: center; gap: 8px; margin-top: 5px; }
+  .bucket-label { flex: 1; font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bucket-bar { width: 60px; height: 5px; background: var(--wash); border-radius: 3px; overflow: hidden; border: 1px solid var(--border); flex-shrink: 0; }
+  .bucket-bar-fill { height: 100%; background: var(--text-secondary); opacity: 0.6; }
+  .bucket-price { width: 34px; text-align: right; font-family: var(--font-mono); font-size: 12px; flex-shrink: 0; }
+  .research-btn { margin-top: 12px; width: 100%; }
+  .result-block { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .verdict-badge {
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.5px; text-transform: uppercase;
+    border-radius: 4px; padding: 2px 6px; margin-right: 8px;
+  }
+  .confidence { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); }
+  .meter-track { position: relative; height: 6px; background: var(--wash); border-radius: 3px; border: 1px solid var(--border); margin-top: 10px; }
+  .meter-fill { position: absolute; height: 100%; border-radius: 3px; opacity: 0.55; }
+  .meter-market-tick { position: absolute; top: -3px; width: 2px; height: 12px; background: var(--text-secondary); }
+  .meter-model-dot { position: absolute; top: -5px; width: 8px; height: 8px; border-radius: 50%; }
+  .meter-labels { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); margin-top: 4px; }
+  .assessment { font-family: var(--font-display); font-size: 13.5px; line-height: 1.5; margin-top: 8px; }
+  .key-stat { margin-top: 8px; font-family: var(--font-mono); font-size: 11.5px; color: var(--text-secondary); background: var(--wash); border: 1px solid var(--border); border-radius: 6px; padding: 6px 9px; }
+  .source-link { display: inline-block; margin-top: 8px; font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); }
+  .empty-state { font-family: var(--font-mono); font-size: 12px; color: var(--text-faint); padding: 20px 0; }
+  .key-panel {
+    background: var(--surface-raised); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 14px; margin-bottom: 16px; display: none;
+  }
+  .key-panel.visible { display: block; }
+  .key-panel label { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-secondary); display: block; margin-bottom: 6px; }
+  .key-panel input {
+    width: 100%; background: var(--wash); border: 1px solid var(--border-light); border-radius: 6px;
+    padding: 8px 10px; color: var(--text-primary); font-family: var(--font-mono); font-size: 12px;
+  }
+  .key-panel .note { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">kalshi · research scanner</div>
+  <h1>Mispricing candidates</h1>
+
+  <div class="disclaimer">
+    Decision support only — not a trading signal, not financial advice. Every "edge" below is an AI probability estimate weighed against the market price, not a proven or backtested model. Verify before you trade.
+  </div>
+
+  <div class="key-panel" id="keyPanel">
+    <label for="apiKeyInput">Anthropic API key (used only in this browser tab, never saved or sent anywhere but api.anthropic.com)</label>
+    <input type="password" id="apiKeyInput" placeholder="sk-ant-...">
+    <div class="note">Get one at console.anthropic.com → API Keys. Each market you research costs a small amount against your own account.</div>
+  </div>
+
+  <div class="controls">
+    <button class="primary" id="scanBtn">scan live markets</button>
+    <button id="demoBtn">view demo data</button>
+    <button id="keyToggleBtn">set api key</button>
+    <button class="filter-btn active" data-filter="all">all</button>
+    <button class="filter-btn" data-filter="weather">weather</button>
+    <button class="filter-btn" data-filter="econ">econ</button>
+  </div>
+
+  <div class="status" id="statusLine"></div>
+  <div class="error-box" id="errorBox" style="display:none;"></div>
+  <div id="cardList"></div>
+</div>
+
+<script>
+const KALSHI_BASE = "https://external-api.kalshi.com/trade-api/v2";
+const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
+const ANTHROPIC_MODEL = "claude-sonnet-5";
+const WEATHER_KEYS = ["weather","climate","temperature"];
+const ECON_KEYS = ["econom","financ","fed","cpi","inflation","jobs","payroll","gdp","rate decision","unemployment"];
+
+const DEMO_CANDIDATES = [
+  { event_ticker:"DEMO-NYC-HIGH", title:"Highest temperature in NYC today?", category:"Climate", focus:"weather",
+    close_time: new Date(Date.now()+2*3600*1000).toISOString(),
+    markets:[{label:"83° or below",price:99,volume:41200},{label:"84° to 85°",price:1,volume:3100}] },
+  { event_ticker:"DEMO-NYC-LOW", title:"Lowest temperature in NYC today?", category:"Climate", focus:"weather",
+    close_time: new Date(Date.now()+5*3600*1000).toISOString(),
+    markets:[{label:"70° to 71°",price:85,volume:36900},{label:"72° to 73°",price:1,volume:500}] },
+  { event_ticker:"DEMO-LA-HIGH", title:"Highest temperature in LA today?", category:"Climate", focus:"weather",
+    close_time: new Date(Date.now()+4*3600*1000).toISOString(),
+    markets:[{label:"74° to 75°",price:99,volume:747073},{label:"70° to 71°",price:1,volume:8000}] },
+  { event_ticker:"DEMO-FED", title:"Fed rate decision this meeting?", category:"Economics", focus:"econ",
+    close_time: new Date(Date.now()+30*24*3600*1000).toISOString(),
+    markets:[{label:"No change",price:78,volume:2100000},{label:"25bp cut",price:20,volume:900000},{label:"25bp hike",price:2,volume:40000}] },
+];
+
+let state = { candidates: [], filter: "all", analysis: {} };
+
+function getPrice(m){
+  for (const f of ["yes_bid_dollars","last_price_dollars","yes_ask_dollars"]){
+    if (m[f] != null){ const v = parseFloat(m[f]); if (!isNaN(v)) return Math.round(v*100); }
+  }
+  if (typeof m.yes_bid === "number") return m.yes_bid;
+  if (typeof m.last_price === "number") return m.last_price;
+  return null;
+}
+function getVolume(m){
+  for (const f of ["volume_fp","volume","volume_24h_fp","volume_24h"]){
+    if (m[f] != null){ const v = parseFloat(m[f]); if (!isNaN(v)) return Math.round(v); }
+  }
+  return 0;
+}
+function classify(ev){
+  const cat=(ev.category||"").toLowerCase(), title=(ev.title||"").toLowerCase();
+  if (WEATHER_KEYS.some(k=>cat.includes(k)||title.includes(k))) return "weather";
+  if (ECON_KEYS.some(k=>cat.includes(k)||title.includes(k))) return "econ";
+  return null;
+}
+function timeUntil(iso){
+  if (!iso) return "—";
+  const diff = new Date(iso).getTime() - Date.now();
+  if (isNaN(diff)) return "—";
+  if (diff <= 0) return "closing";
+  const hrs = Math.floor(diff/3600000), mins = Math.floor((diff%3600000)/60000);
+  if (hrs >= 48) return `${Math.floor(hrs/24)}d`;
+  if (hrs >= 1) return `${hrs}h ${mins}m`;
+  return `${mins}m`;
+}
+function verdictColor(v){
+  if (v === "possible_mispricing") return "var(--green)";
+  if (v === "insufficient_data") return "var(--amber)";
+  return "var(--text-secondary)";
+}
+
+async function fetchJSON(url){
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+async function runScan(){
+  const statusLine = document.getElementById("statusLine");
+  const errorBox = document.getElementById("errorBox");
+  const scanBtn = document.getElementById("scanBtn");
+  scanBtn.disabled = true; scanBtn.textContent = "scanning…";
+  errorBox.style.display = "none";
+  try {
+    const data = await fetchJSON(`${KALSHI_BASE}/events?status=open&with_nested_markets=true&limit=200`);
+    const events = data.events || [];
+    const normalized = events.filter(ev=>classify(ev)).map(ev=>{
+      const markets = (ev.markets||[]).map(m=>({
+        ticker: m.ticker, label: m.yes_sub_title || m.subtitle || m.ticker,
+        price: getPrice(m), volume: getVolume(m), close_time: m.close_time || ev.close_time,
+      })).filter(m=>m.price!==null).sort((a,b)=>b.price-a.price);
+      return { event_ticker: ev.event_ticker, title: ev.title || ev.event_ticker,
+        category: ev.category || "Uncategorized", focus: classify(ev),
+        close_time: markets[0]?.close_time || ev.close_time || null, markets };
+    }).filter(c=>c.markets.length>0).sort((a,b)=> new Date(a.close_time||0) - new Date(b.close_time||0));
+    state.candidates = normalized.slice(0,30);
+    state.isDemo = false;
+    statusLine.textContent = `last scanned ${new Date().toLocaleTimeString()} · ${state.candidates.length} candidates found`;
+    if (normalized.length === 0){
+      errorBox.style.display = "block";
+      errorBox.textContent = "Scan succeeded but found no open weather/economic markets right now.";
+    }
+  } catch (err){
+    errorBox.style.display = "block";
+    errorBox.textContent = `Couldn't reach Kalshi's API (${err.message}). If this keeps happening once the page is properly hosted (not opened as a local file), Kalshi's server may not allow browser requests from this domain — check the browser console for a CORS error to confirm.`;
+    state.candidates = [];
+  } finally {
+    scanBtn.disabled = false; scanBtn.textContent = "scan live markets";
+    renderList();
+  }
+}
+
+function loadDemo(){
+  state.candidates = DEMO_CANDIDATES;
+  state.isDemo = true;
+  document.getElementById("errorBox").style.display = "none";
+  document.getElementById("statusLine").textContent = `showing demo data · ${state.candidates.length} candidates`;
+  renderList();
+}
+
+function bucketRowsHtml(c){
+  return c.markets.slice(0,4).map(m => `
+    <div class="bucket-row">
+      <div class="bucket-label">${m.label}</div>
+      <div class="bucket-bar"><div class="bucket-bar-fill" style="width:${m.price}%"></div></div>
+      <div class="bucket-price">${m.price}%</div>
+    </div>`).join("");
+}
+
+function resultHtml(c, r){
+  const color = verdictColor(r.verdict);
+  const label = r.verdict === "possible_mispricing" ? "possible edge" : r.verdict === "insufficient_data" ? "unclear" : "looks fair";
+  const mp = r.market_price_pct ?? 0, mo = r.model_probability_pct ?? 0;
+  const left = Math.min(mp, mo), width = Math.max(Math.abs(mo-mp), 0.5);
+  const barColor = mo >= mp ? "var(--green)" : "var(--red)";
+  return `
+    <div class="result-block">
+      <div>
+        <span class="verdict-badge" style="color:${color};border:1px solid ${color}">${label}</span>
+        <span class="confidence">confidence: ${r.confidence || "?"}</span>
+      </div>
+      <div class="meter-track">
+        <div class="meter-fill" style="left:${left}%;width:${width}%;background:${barColor}"></div>
+        <div class="meter-market-tick" style="left:${mp}%"></div>
+        <div class="meter-model-dot" style="left:${mo}%;background:${barColor};box-shadow:0 0 6px ${barColor}"></div>
+      </div>
+      <div class="meter-labels"><span>market ${mp}%</span><span style="color:${barColor}">model ${mo}%</span></div>
+      <div class="assessment">${r.assessment || ""}</div>
+      ${r.key_stat ? `<div class="key-stat">${r.key_stat}</div>` : ""}
+      ${r.source_url ? `<a class="source-link" href="${r.source_url}" target="_blank" rel="noopener noreferrer">source: ${r.source_title || r.source_url}</a>` : ""}
+    </div>`;
+}
+
+function renderList(){
+  const container = document.getElementById("cardList");
+  const visible = state.candidates.filter(c => state.filter === "all" || c.focus === state.filter);
+  if (visible.length === 0){
+    container.innerHTML = `<div class="empty-state">No candidates yet — scan live markets or view demo data above.</div>`;
+    return;
+  }
+  container.innerHTML = visible.map(c => {
+    const a = state.analysis[c.event_ticker] || {};
+    let inner = `
+      <div class="tag">${c.category} · closes ${timeUntil(c.close_time)}</div>
+      <div class="title">${c.title}</div>
+      ${bucketRowsHtml(c)}`;
+    if (!a.data){
+      inner += `<button class="research-btn" data-ticker="${c.event_ticker}" ${a.loading?"disabled":""}>${a.loading?"researching…":"research this market →"}</button>`;
+    }
+    if (a.error){
+      inner += `<div style="margin-top:10px;font-family:var(--font-mono);font-size:11.5px;color:var(--red)">couldn't complete research: ${a.error}</div>`;
+    }
+    if (a.data){
+      inner += resultHtml(c, a.data);
+    }
+    return `<div class="card">${inner}</div>`;
+  }).join("");
+
+  container.querySelectorAll(".research-btn").forEach(btn=>{
+    btn.addEventListener("click", () => analyzeCandidate(btn.dataset.ticker));
+  });
+}
+
+async function analyzeCandidate(ticker){
+  const candidate = state.candidates.find(c => c.event_ticker === ticker);
+  if (!candidate) return;
+  const apiKey = document.getElementById("apiKeyInput").value.trim();
+  if (!apiKey){
+    state.analysis[ticker] = { error: "enter your Anthropic API key above first (click \"set api key\")" };
+    renderList();
+    return;
+  }
+  state.analysis[ticker] = { loading: true };
+  renderList();
+
+  const top = candidate.markets.slice(0,6);
+  const bucketLines = top.map(m => `- ${m.label}: ${m.price}% implied (volume ${m.volume})`).join("\n");
+  const prompt = `You are a research analyst reviewing a live Kalshi prediction market for potential mispricing.
+
+Market: "${candidate.title}"
+Category: ${candidate.category}
+Closes: ${candidate.close_time}
+Current priced outcomes (price = market-implied probability):
+${bucketLines}
+
+Research current, real-world information relevant to this specific question using web search. Then judge whether the market's pricing for its currently-leading outcome looks accurate, or looks off given what you find. Be honest about uncertainty -- "insufficient_data" is a legitimate answer.
+
+Respond with ONLY raw JSON, no markdown fences, no commentary outside the JSON:
+{"leading_bucket": "string", "market_price_pct": number, "model_probability_pct": number, "edge_pct": number, "confidence": "low or medium or high", "verdict": "looks_fair or possible_mispricing or insufficient_data", "assessment": "2-3 sentence plain-English reasoning", "key_stat": "one concrete fact", "source_title": "string", "source_url": "string"}`;
+
+  try {
+    const resp = await fetch(ANTHROPIC_URL, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model: ANTHROPIC_MODEL,
+        max_tokens: 1200,
+        messages: [{ role: "user", content: prompt }],
+        tools: [{ type: "web_search_20250305", name: "web_search" }]
+      })
+    });
+    if (!resp.ok){
+      const errText = await resp.text();
+      throw new Error(`HTTP ${resp.status}: ${errText.slice(0,200)}`);
+    }
+    const data = await resp.json();
+    const text = (data.content||[]).map(b=>b.text||"").filter(Boolean).join("\n");
+    const cleaned = text.replace(/```json|```/g,"").trim();
+    const start = cleaned.indexOf("{"), end = cleaned.lastIndexOf("}");
+    if (start === -1 || end === -1) throw new Error("model did not return parseable JSON");
+    const parsed = JSON.parse(cleaned.slice(start, end+1));
+    state.analysis[ticker] = { data: parsed };
+  } catch (err){
+    state.analysis[ticker] = { error: err.message };
+  }
+  renderList();
+}
+
+document.getElementById("scanBtn").addEventListener("click", runScan);
+document.getElementById("demoBtn").addEventListener("click", loadDemo);
+document.getElementById("keyToggleBtn").addEventListener("click", () => {
+  document.getElementById("keyPanel").classList.toggle("visible");
+});
+document.querySelectorAll(".filter-btn").forEach(btn=>{
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".filter-btn").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
+    state.filter = btn.dataset.filter;
+    renderList();
+  });
+});
+
+renderList();
+</script>
+</body>
+</html>

@@ -127,7 +127,7 @@
 </div>
 
 <script>
-const KALSHI_BASE = "https://external-api.kalshi.com/trade-api/v2";
+const KALSHI_BASE = "/api/kalshi"; // our own serverless function, not Kalshi directly
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_MODEL = "claude-sonnet-5";
 const WEATHER_KEYS = ["weather","climate","temperature"];
@@ -187,16 +187,9 @@ function verdictColor(v){
 }
 
 async function fetchJSON(url){
-  try {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
-  } catch (directErr) {
-    const proxied = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-    const res2 = await fetch(proxied);
-    if (!res2.ok) throw new Error(`direct fetch blocked (${directErr.message}), proxy also failed: HTTP ${res2.status}`);
-    return await res2.json();
-  }
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
 }
 
 async function runScan(){
@@ -206,7 +199,7 @@ async function runScan(){
   scanBtn.disabled = true; scanBtn.textContent = "scanning…";
   errorBox.style.display = "none";
   try {
-    const data = await fetchJSON(`${KALSHI_BASE}/events?status=open&with_nested_markets=true&limit=200`);
+    const data = await fetchJSON(`${KALSHI_BASE}?status=open&with_nested_markets=true&limit=200`);
     const events = data.events || [];
     const normalized = events.filter(ev=>classify(ev)).map(ev=>{
       const markets = (ev.markets||[]).map(m=>({
@@ -226,7 +219,7 @@ async function runScan(){
     }
   } catch (err){
     errorBox.style.display = "block";
-    errorBox.textContent = `Couldn't reach Kalshi's API, even through the proxy fallback (${err.message}). The public proxy may be rate-limited or temporarily down — try again in a bit.`;
+    errorBox.textContent = `Couldn't reach the scanner's backend (${err.message}). If this is a fresh deploy, wait a minute and try again -- otherwise check the Vercel deployment logs.`;
     state.candidates = [];
   } finally {
     scanBtn.disabled = false; scanBtn.textContent = "scan live markets";

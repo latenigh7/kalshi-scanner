@@ -187,9 +187,16 @@ function verdictColor(v){
 }
 
 async function fetchJSON(url){
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (directErr) {
+    const proxied = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+    const res2 = await fetch(proxied);
+    if (!res2.ok) throw new Error(`direct fetch blocked (${directErr.message}), proxy also failed: HTTP ${res2.status}`);
+    return await res2.json();
+  }
 }
 
 async function runScan(){
@@ -219,7 +226,7 @@ async function runScan(){
     }
   } catch (err){
     errorBox.style.display = "block";
-    errorBox.textContent = `Couldn't reach Kalshi's API (${err.message}). If this keeps happening once the page is properly hosted (not opened as a local file), Kalshi's server may not allow browser requests from this domain — check the browser console for a CORS error to confirm.`;
+    errorBox.textContent = `Couldn't reach Kalshi's API, even through the proxy fallback (${err.message}). The public proxy may be rate-limited or temporarily down — try again in a bit.`;
     state.candidates = [];
   } finally {
     scanBtn.disabled = false; scanBtn.textContent = "scan live markets";

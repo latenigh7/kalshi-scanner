@@ -5,23 +5,26 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Kalshi Research Scanner</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #0B0D10;
-    --surface: #14171B;
-    --surface-raised: #191D22;
-    --border: #242A31;
-    --border-light: #2E3540;
-    --text-primary: #ECEAE4;
-    --text-secondary: #8B929B;
-    --text-faint: #565D66;
-    --green: #3FC98A;
-    --red: #E2725B;
-    --amber: #E0B454;
-    --wash: #0F1215;
-    --font-display: 'Space Grotesk', system-ui, sans-serif;
+    --bg: #0A0B0E;
+    --surface: #131419;
+    --surface-raised: #1A1C22;
+    --border: rgba(255,255,255,0.07);
+    --border-light: rgba(255,255,255,0.13);
+    --text-primary: #F1F0ED;
+    --text-secondary: #92949D;
+    --text-faint: #56585F;
+    --green: #34D399;
+    --green-dim: rgba(52,211,153,0.12);
+    --red: #F0685E;
+    --red-dim: rgba(240,104,94,0.12);
+    --amber: #F5B754;
+    --wash: #0D0E12;
+    --font-display: 'Manrope', system-ui, -apple-system, sans-serif;
     --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+    --shadow-card: 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px -12px rgba(0,0,0,0.5);
   }
   * { box-sizing: border-box; }
   body {
@@ -29,100 +32,99 @@
     background: var(--bg);
     color: var(--text-primary);
     font-family: var(--font-display);
-    padding: 22px 16px 60px;
+    padding: 28px 18px 70px;
+    -webkit-font-smoothing: antialiased;
   }
-  .wrap { max-width: 620px; margin: 0 auto; }
+  .wrap { max-width: 600px; margin: 0 auto; }
   .eyebrow {
-    font-family: var(--font-mono); font-size: 11px; letter-spacing: 1px;
-    color: var(--text-faint); text-transform: uppercase; margin-bottom: 6px;
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 1.2px;
+    color: var(--text-faint); text-transform: uppercase; margin-bottom: 8px; font-weight: 500;
   }
-  h1 { font-size: 25px; margin: 0 0 10px; font-weight: 600; letter-spacing: -0.3px; }
+  h1 { font-size: 26px; margin: 0 0 16px; font-weight: 700; letter-spacing: -0.5px; }
   .disclaimer {
-    background: var(--surface-raised); border: 1px solid var(--border); border-radius: 8px;
-    padding: 10px 12px; font-family: var(--font-mono); font-size: 11.5px; color: var(--text-secondary);
-    line-height: 1.5; margin-bottom: 18px;
+    background: transparent; border: none; border-left: 2px solid var(--border-light);
+    padding: 2px 0 2px 14px; font-size: 12.5px; color: var(--text-secondary);
+    line-height: 1.6; margin-bottom: 24px;
   }
-  .controls { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; }
+  .controls { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
   button {
-    font-family: var(--font-mono); font-size: 12px; border-radius: 7px; cursor: pointer;
-    padding: 9px 16px; border: 1px solid var(--border-light); background: transparent; color: var(--text-primary);
+    font-family: var(--font-display); font-size: 12.5px; font-weight: 600; border-radius: 8px; cursor: pointer;
+    padding: 9px 15px; border: 1px solid var(--border-light); background: var(--surface); color: var(--text-primary);
+    transition: background 0.15s, border-color 0.15s;
   }
-  button.primary { background: var(--text-primary); color: var(--bg); border: none; font-weight: 500; }
-  button:disabled { color: var(--text-faint); cursor: default; }
+  button:hover:not(:disabled) { background: var(--surface-raised); }
+  button.primary { background: var(--text-primary); color: var(--bg); border: none; }
+  button.primary:hover:not(:disabled) { background: #fff; }
+  button:disabled { color: var(--text-faint); cursor: default; opacity: 0.6; }
   .filter-btn.active { background: var(--surface-raised); color: var(--text-primary); border-color: var(--border-light); }
-  .filter-btn { background: transparent; color: var(--text-faint); border-color: var(--border); }
-  .status { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); margin-bottom: 10px; }
+  .filter-btn { background: transparent; color: var(--text-faint); border-color: transparent; font-weight: 500; padding: 9px 12px; }
+  .status { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); margin-bottom: 12px; letter-spacing: 0.2px; }
   .error-box {
-    background: rgba(226,114,91,0.08); border: 1px solid var(--red); border-radius: 8px;
-    padding: 12px 14px; font-family: var(--font-mono); font-size: 12px; color: var(--red);
-    line-height: 1.5; margin-bottom: 16px; white-space: pre-wrap;
+    background: var(--red-dim); border: none; border-radius: 10px;
+    padding: 13px 15px; font-size: 12.5px; color: #FCA5A0;
+    line-height: 1.55; margin-bottom: 18px;
   }
   .card {
-    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
-    padding: 16px 16px 14px; margin-bottom: 12px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    padding: 18px 18px 16px; margin-bottom: 10px; box-shadow: var(--shadow-card);
   }
-  .card .tag { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.6px; color: var(--text-faint); text-transform: uppercase; }
-  .card .title { font-family: var(--font-display); font-size: 16px; margin-top: 3px; line-height: 1.3; }
-  .bucket-row { display: flex; align-items: center; gap: 8px; margin-top: 5px; }
-  .bucket-label { flex: 1; font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .bucket-bar { width: 60px; height: 5px; background: var(--wash); border-radius: 3px; overflow: hidden; border: 1px solid var(--border); flex-shrink: 0; }
-  .bucket-bar-fill { height: 100%; background: var(--text-secondary); opacity: 0.6; }
-  .bucket-price { width: 34px; text-align: right; font-family: var(--font-mono); font-size: 12px; flex-shrink: 0; }
-  .research-btn { margin-top: 12px; width: 100%; }
-  .result-block { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .card .tag { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.6px; color: var(--text-faint); text-transform: uppercase; font-weight: 500; }
+  .card .title { font-family: var(--font-display); font-weight: 600; font-size: 15.5px; margin-top: 5px; line-height: 1.4; }
+  .bucket-row { display: flex; align-items: center; gap: 10px; margin-top: 7px; }
+  .bucket-label { flex: 1; font-size: 12.5px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bucket-bar { width: 56px; height: 4px; background: var(--wash); border-radius: 2px; overflow: hidden; flex-shrink: 0; }
+  .bucket-bar-fill { height: 100%; background: var(--text-faint); border-radius: 2px; }
+  .bucket-price { width: 36px; text-align: right; font-family: var(--font-mono); font-size: 12px; font-weight: 500; flex-shrink: 0; }
+  .research-btn { margin-top: 14px; width: 100%; }
+  .result-block { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
   .verdict-badge {
-    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.5px; text-transform: uppercase;
-    border-radius: 4px; padding: 2px 6px; margin-right: 8px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.2px;
+    border-radius: 6px; padding: 3px 9px; margin-right: 8px;
   }
   .confidence { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); }
-  .meter-track { position: relative; height: 6px; background: var(--wash); border-radius: 3px; border: 1px solid var(--border); margin-top: 10px; }
-  .meter-fill { position: absolute; height: 100%; border-radius: 3px; opacity: 0.55; }
-  .meter-market-tick { position: absolute; top: -3px; width: 2px; height: 12px; background: var(--text-secondary); }
-  .meter-model-dot { position: absolute; top: -5px; width: 8px; height: 8px; border-radius: 50%; }
-  .meter-labels { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); margin-top: 4px; }
-  .assessment { font-family: var(--font-display); font-size: 13.5px; line-height: 1.5; margin-top: 8px; }
-  .key-stat { margin-top: 8px; font-family: var(--font-mono); font-size: 11.5px; color: var(--text-secondary); background: var(--wash); border: 1px solid var(--border); border-radius: 6px; padding: 6px 9px; }
-  .source-link { display: inline-block; margin-top: 8px; font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); }
-  .empty-state { font-family: var(--font-mono); font-size: 12px; color: var(--text-faint); padding: 20px 0; }
+  .meter-track { position: relative; height: 4px; background: var(--wash); border-radius: 2px; margin-top: 12px; }
+  .meter-fill { position: absolute; height: 100%; border-radius: 2px; opacity: 0.9; }
+  .meter-market-tick { position: absolute; top: -4px; width: 2px; height: 12px; background: var(--text-secondary); border-radius: 1px; }
+  .meter-model-dot { position: absolute; top: -4px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--bg); }
+  .meter-labels { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); margin-top: 8px; }
+  .assessment { font-size: 13.5px; line-height: 1.6; margin-top: 10px; color: var(--text-primary); }
+  .key-stat { margin-top: 10px; font-size: 12px; color: var(--text-secondary); background: var(--wash); border-radius: 8px; padding: 9px 12px; line-height: 1.5; }
+  .source-link { display: inline-block; margin-top: 10px; font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); text-decoration: none; border-bottom: 1px solid var(--border-light); padding-bottom: 1px; }
+  .empty-state { font-size: 13px; color: var(--text-faint); padding: 24px 0; }
   .key-panel {
-    background: var(--surface-raised); border: 1px solid var(--border); border-radius: 8px;
-    padding: 12px 14px; margin-bottom: 16px; display: none;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 16px; margin-bottom: 18px; display: none; box-shadow: var(--shadow-card);
   }
   .key-panel.visible { display: block; }
-  .key-panel label { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-secondary); display: block; margin-bottom: 6px; }
+  .key-panel label { font-size: 12.5px; color: var(--text-secondary); display: block; margin-bottom: 8px; font-weight: 500; }
   .key-panel input {
-    width: 100%; background: var(--wash); border: 1px solid var(--border-light); border-radius: 6px;
-    padding: 8px 10px; color: var(--text-primary); font-family: var(--font-mono); font-size: 12px;
+    width: 100%; background: var(--wash); border: 1px solid var(--border-light); border-radius: 8px;
+    padding: 9px 11px; color: var(--text-primary); font-family: var(--font-mono); font-size: 12px;
   }
-  .key-panel .note { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); margin-top: 6px; }
-  .sort-row { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
-  .sort-row .sort-label { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.5px; }
-  .sort-btn { padding: 6px 12px; font-size: 11px; }
+  .key-panel .note { font-size: 11.5px; color: var(--text-faint); margin-top: 8px; line-height: 1.5; }
+  .sort-row { display: flex; gap: 6px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+  .sort-row .sort-label { font-family: var(--font-mono); font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.6px; margin-right: 2px; }
+  .sort-btn { padding: 6px 12px; font-size: 11.5px; font-weight: 500; }
   .sort-btn.active { background: var(--surface-raised); color: var(--text-primary); border-color: var(--border-light); }
-  .sort-btn:not(.active) { color: var(--text-faint); }
-  .top-picks { margin-bottom: 22px; }
-  .top-picks-header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; }
+  .sort-btn:not(.active) { color: var(--text-faint); background: transparent; border-color: transparent; }
+  .top-picks { margin-bottom: 26px; }
+  .top-picks-header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
   .top-picks-header .eyebrow { margin-bottom: 0; }
   .pick-card {
-    background: linear-gradient(180deg, var(--surface-raised), var(--surface));
-    border: 1px solid var(--border-light); border-radius: 10px;
-    padding: 14px 16px; margin-bottom: 10px; position: relative; overflow: hidden;
+    background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--green);
+    border-radius: 12px; padding: 16px 18px; margin-bottom: 10px; box-shadow: var(--shadow-card);
   }
-  .pick-rank {
-    position: absolute; top: 0; left: 0; font-family: var(--font-mono); font-size: 34px; font-weight: 600;
-    color: var(--text-primary); opacity: 0.06; line-height: 1; padding: 6px 10px;
-  }
-  .pick-score-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
-  .pick-score { font-family: var(--font-mono); font-size: 20px; font-weight: 600; }
-  .pick-title { font-family: var(--font-display); font-size: 14.5px; margin: 2px 0 6px; line-height: 1.35; }
+  .pick-score-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .pick-score { font-family: var(--font-mono); font-size: 22px; font-weight: 700; }
+  .pick-title { font-weight: 600; font-size: 14.5px; margin: 3px 0 8px; line-height: 1.4; }
   .pick-meta { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); }
-  .pick-why { font-family: var(--font-display); font-size: 13px; line-height: 1.45; color: var(--text-secondary); margin-top: 6px; }
-  .batch-row { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+  .pick-why { font-size: 13px; line-height: 1.55; color: var(--text-secondary); margin-top: 8px; }
+  .batch-row { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
   .batch-progress { font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); }
-  .card.has-edge { border-color: var(--green); }
+  .card.has-edge { border-color: rgba(52,211,153,0.35); }
   .card-rank-badge {
-    display: inline-block; font-family: var(--font-mono); font-size: 10px; font-weight: 600;
-    background: var(--green); color: var(--bg); border-radius: 4px; padding: 1px 6px; margin-right: 8px;
+    display: inline-block; font-family: var(--font-mono); font-size: 10px; font-weight: 700;
+    background: var(--green-dim); color: var(--green); border-radius: 5px; padding: 1px 7px; margin-right: 8px;
   }
 </style>
 </head>
@@ -341,11 +343,11 @@ function renderTopPicks(){
       const barColor = x.r.model_probability_pct >= x.r.market_price_pct ? "var(--green)" : "var(--red)";
       return `
       <div class="pick-card">
-        <div class="pick-rank">#${i+1}</div>
         <div class="pick-score-row">
-          <span class="pick-score" style="color:${barColor}">score ${x.score}</span>
+          <span class="pick-meta">PICK #${i+1}</span>
           <span class="pick-meta">${x.r.confidence} confidence</span>
         </div>
+        <div class="pick-score" style="color:${barColor}">${x.score}</div>
         <div class="pick-title">${x.c.title}</div>
         <div class="pick-meta">market ${x.r.market_price_pct}% vs model ${x.r.model_probability_pct}%</div>
         <div class="pick-why">${x.r.assessment || ""}</div>

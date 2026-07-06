@@ -70,13 +70,15 @@
   }
   .card .tag { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.6px; color: var(--text-faint); text-transform: uppercase; font-weight: 500; }
   .card .title { font-family: var(--font-display); font-weight: 600; font-size: 15.5px; margin-top: 5px; line-height: 1.4; }
-  .bucket-row { display: flex; align-items: center; gap: 10px; margin-top: 7px; }
-  .bucket-label { flex: 1; font-size: 12.5px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .bucket-bar { width: 56px; height: 4px; background: var(--wash); border-radius: 2px; overflow: hidden; flex-shrink: 0; }
+  .bucket-row { display: flex; align-items: center; gap: 10px; margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--border); }
+  .bucket-row:first-of-type { margin-top: 12px; padding-top: 0; border-top: none; }
+  .bucket-label { flex: 1; font-size: 13px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bucket-bar { width: 50px; height: 4px; background: var(--wash); border-radius: 2px; overflow: hidden; flex-shrink: 0; }
   .bucket-bar-fill { height: 100%; background: var(--text-faint); border-radius: 2px; }
-  .bucket-price-col { display: flex; flex-direction: column; align-items: flex-end; width: 52px; flex-shrink: 0; }
-  .bucket-price { font-family: var(--font-mono); font-size: 12px; font-weight: 600; }
-  .bucket-vol { font-family: var(--font-mono); font-size: 9.5px; color: var(--text-faint); margin-top: 1px; }
+  .bucket-price-col { display: flex; flex-direction: column; align-items: flex-end; width: 80px; flex-shrink: 0; }
+  .bucket-price-line { font-family: var(--font-mono); font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+  .bucket-mult { color: var(--text-secondary); font-weight: 500; margin-left: 5px; }
+  .bucket-vol { font-family: var(--font-mono); font-size: 9.5px; color: var(--text-faint); margin-top: 2px; }
   .research-btn { margin-top: 14px; width: 100%; }
   .result-block { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
   .verdict-badge {
@@ -149,10 +151,9 @@
     <button class="primary" id="scanBtn">scan live markets</button>
     <button id="demoBtn">view demo data</button>
     <button id="keyToggleBtn">set api key</button>
-    <button class="filter-btn active" data-filter="all">all</button>
-    <button class="filter-btn" data-filter="weather">weather</button>
-    <button class="filter-btn" data-filter="econ">econ</button>
   </div>
+
+  <div class="controls" id="categoryFilters"></div>
 
   <div class="batch-row" id="batchRow" style="display:none;">
     <button id="researchAllBtn">research all visible →</button>
@@ -176,8 +177,14 @@
 const KALSHI_BASE = "/api/kalshi"; // our own serverless function, not Kalshi directly
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_MODEL = "claude-sonnet-5";
-const WEATHER_KEYS = ["weather","climate","temperature"];
-const ECON_KEYS = ["econom","financ","fed","cpi","inflation","jobs","payroll","gdp","rate decision","unemployment"];
+// Each category here is checked against a Kalshi event's category + title.
+// To add a new category later, just add another entry to this list.
+const CATEGORY_DEFS = [
+  { id: "weather", label: "weather", keys: ["weather","climate","temperature"] },
+  { id: "econ", label: "econ", keys: ["econom","financ","fed","cpi","inflation","jobs","payroll","gdp","rate decision","unemployment"] },
+  { id: "politics", label: "politics", keys: ["politic","election","senate","congress","president","governor","legislat"] },
+  { id: "crypto", label: "crypto", keys: ["crypto","bitcoin","ethereum","btc","eth "] },
+];
 
 const DEMO_CANDIDATES = [
   { event_ticker:"DEMO-NYC-HIGH", title:"Highest temperature in NYC today?", category:"Climate", focus:"weather",
@@ -221,9 +228,16 @@ function getVolume(m){
 }
 function classify(ev){
   const cat=(ev.category||"").toLowerCase(), title=(ev.title||"").toLowerCase();
-  if (WEATHER_KEYS.some(k=>cat.includes(k)||title.includes(k))) return "weather";
-  if (ECON_KEYS.some(k=>cat.includes(k)||title.includes(k))) return "econ";
+  for (const def of CATEGORY_DEFS){
+    if (def.keys.some(k=>cat.includes(k)||title.includes(k))) return def.id;
+  }
   return null;
+}
+function formatMultiplier(price){
+  if (!price || price <= 0) return "—";
+  const mult = 100 / price;
+  if (mult >= 100) return Math.round(mult) + "x";
+  return mult.toFixed(mult >= 10 ? 1 : 2) + "x";
 }
 function timeUntil(iso){
   if (!iso) return "—";
@@ -240,6 +254,23 @@ function verdictColor(v){
   if (v === "insufficient_data") return "var(--amber)";
   return "var(--text-secondary)";
 }
+
+function renderCategoryFilters(){
+  const container = document.getElementById("categoryFilters");
+  const buttons = [{ id: "all", label: "all" }, ...CATEGORY_DEFS];
+  container.innerHTML = buttons.map(b =>
+    `<button class="filter-btn${state.filter===b.id?" active":""}" data-filter="${b.id}">${b.label}</button>`
+  ).join("");
+  container.querySelectorAll(".filter-btn").forEach(btn=>{
+    btn.addEventListener("click", () => {
+      container.querySelectorAll(".filter-btn").forEach(b=>b.classList.remove("active"));
+      btn.classList.add("active");
+      state.filter = btn.dataset.filter;
+      renderList();
+    });
+  });
+}
+renderCategoryFilters();
 
 async function fetchJSON(url){
   const res = await fetch(url);
@@ -303,7 +334,7 @@ function bucketRowsHtml(c){
       <div class="bucket-label">${m.label}</div>
       <div class="bucket-bar"><div class="bucket-bar-fill" style="width:${m.price}%"></div></div>
       <div class="bucket-price-col">
-        <div class="bucket-price">${m.price}%</div>
+        <div class="bucket-price-line">${m.price}%<span class="bucket-mult">${formatMultiplier(m.price)}</span></div>
         <div class="bucket-vol">${formatVolume(m.volume)} vol</div>
       </div>
     </div>`).join("");
@@ -494,14 +525,6 @@ document.getElementById("scanBtn").addEventListener("click", runScan);
 document.getElementById("demoBtn").addEventListener("click", loadDemo);
 document.getElementById("keyToggleBtn").addEventListener("click", () => {
   document.getElementById("keyPanel").classList.toggle("visible");
-});
-document.querySelectorAll(".filter-btn").forEach(btn=>{
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".filter-btn").forEach(b=>b.classList.remove("active"));
-    btn.classList.add("active");
-    state.filter = btn.dataset.filter;
-    renderList();
-  });
 });
 document.querySelectorAll(".sort-btn").forEach(btn=>{
   btn.addEventListener("click", () => {

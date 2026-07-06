@@ -74,7 +74,9 @@
   .bucket-label { flex: 1; font-size: 12.5px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .bucket-bar { width: 56px; height: 4px; background: var(--wash); border-radius: 2px; overflow: hidden; flex-shrink: 0; }
   .bucket-bar-fill { height: 100%; background: var(--text-faint); border-radius: 2px; }
-  .bucket-price { width: 36px; text-align: right; font-family: var(--font-mono); font-size: 12px; font-weight: 500; flex-shrink: 0; }
+  .bucket-price-col { display: flex; flex-direction: column; align-items: flex-end; width: 52px; flex-shrink: 0; }
+  .bucket-price { font-family: var(--font-mono); font-size: 12px; font-weight: 600; }
+  .bucket-vol { font-family: var(--font-mono); font-size: 9.5px; color: var(--text-faint); margin-top: 1px; }
   .research-btn { margin-top: 14px; width: 100%; }
   .result-block { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
   .verdict-badge {
@@ -288,12 +290,22 @@ function loadDemo(){
   renderList();
 }
 
+function formatVolume(v){
+  if (v == null) return "0";
+  if (v >= 1000000) return (v/1000000).toFixed(1).replace(/\.0$/,"") + "M";
+  if (v >= 1000) return (v/1000).toFixed(1).replace(/\.0$/,"") + "K";
+  return String(v);
+}
+
 function bucketRowsHtml(c){
   return c.markets.slice(0,4).map(m => `
     <div class="bucket-row">
       <div class="bucket-label">${m.label}</div>
       <div class="bucket-bar"><div class="bucket-bar-fill" style="width:${m.price}%"></div></div>
-      <div class="bucket-price">${m.price}%</div>
+      <div class="bucket-price-col">
+        <div class="bucket-price">${m.price}%</div>
+        <div class="bucket-vol">${formatVolume(m.volume)} vol</div>
+      </div>
     </div>`).join("");
 }
 
@@ -396,8 +408,9 @@ function renderList(){
     const a = state.analysis[c.event_ticker] || {};
     const rankIdx = edgeRanked.indexOf(c);
     const hasEdge = a.data && a.data.verdict === "possible_mispricing";
+    const totalVolume = c.markets.reduce((sum,m) => sum + (m.volume||0), 0);
     let inner = `
-      <div class="tag">${rankIdx > -1 ? `<span class="card-rank-badge">#${rankIdx+1}</span>` : ""}${c.category} · closes ${timeUntil(c.close_time)}</div>
+      <div class="tag">${rankIdx > -1 ? `<span class="card-rank-badge">#${rankIdx+1}</span>` : ""}${c.category} · closes ${timeUntil(c.close_time)} · $${formatVolume(totalVolume)} vol · ${c.markets.length} markets</div>
       <div class="title">${c.title}</div>
       ${bucketRowsHtml(c)}`;
     if (!a.data){

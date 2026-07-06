@@ -46,7 +46,15 @@
     padding: 2px 0 2px 14px; font-size: 12.5px; color: var(--text-secondary);
     line-height: 1.6; margin-bottom: 24px;
   }
-  .controls { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+  .controls { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; }
+  .controls .primary { padding: 13px 22px; font-size: 14px; border-radius: 10px; }
+  .secondary-links { margin-bottom: 20px; }
+  .link-btn {
+    background: none; border: none; padding: 0; color: var(--text-faint);
+    font-family: var(--font-display); font-size: 12px; font-weight: 500; text-decoration: underline;
+    text-decoration-color: var(--border-light); text-underline-offset: 3px; cursor: pointer;
+  }
+  .secondary-links .dot { color: var(--text-faint); margin: 0 8px; font-size: 12px; }
   button {
     font-family: var(--font-display); font-size: 12.5px; font-weight: 600; border-radius: 8px; cursor: pointer;
     padding: 9px 15px; border: 1px solid var(--border-light); background: var(--surface); color: var(--text-primary);
@@ -148,23 +156,17 @@
   </div>
 
   <div class="controls">
-    <button class="primary" id="scanBtn">scan live markets</button>
-    <button id="demoBtn">view demo data</button>
-    <button id="keyToggleBtn">set api key</button>
+    <button class="primary" id="scanBtn">find top 5 bets →</button>
   </div>
-
-  <div class="controls" id="categoryFilters"></div>
+  <div class="secondary-links">
+    <button id="demoBtn" class="link-btn">view demo data</button>
+    <span class="dot">·</span>
+    <button id="keyToggleBtn" class="link-btn">set api key</button>
+  </div>
 
   <div class="batch-row" id="batchRow" style="display:none;">
-    <button id="researchAllBtn">research all visible →</button>
+    <button id="researchAllBtn">research all 5 →</button>
     <span class="batch-progress" id="batchProgress"></span>
-  </div>
-
-  <div class="sort-row" id="sortRow" style="display:none;">
-    <span class="sort-label">sort:</span>
-    <button class="sort-btn active" data-sort="closing">closing soon</button>
-    <button class="sort-btn" data-sort="volume">highest volume</button>
-    <button class="sort-btn" data-sort="edge">best edge</button>
   </div>
 
   <div class="status" id="statusLine"></div>
@@ -201,7 +203,7 @@ const DEMO_CANDIDATES = [
     markets:[{label:"No change",price:78,volume:2100000},{label:"25bp cut",price:20,volume:900000},{label:"25bp hike",price:2,volume:40000}] },
 ];
 
-let state = { candidates: [], filter: "all", analysis: {}, sortMode: "closing" };
+let state = { candidates: [], analysis: {} };
 
 const CONFIDENCE_WEIGHT = { high: 1, medium: 0.65, low: 0.35 };
 
@@ -255,22 +257,20 @@ function verdictColor(v){
   return "var(--text-secondary)";
 }
 
-function renderCategoryFilters(){
-  const container = document.getElementById("categoryFilters");
-  const buttons = [{ id: "all", label: "all" }, ...CATEGORY_DEFS];
-  container.innerHTML = buttons.map(b =>
-    `<button class="filter-btn${state.filter===b.id?" active":""}" data-filter="${b.id}">${b.label}</button>`
-  ).join("");
-  container.querySelectorAll(".filter-btn").forEach(btn=>{
-    btn.addEventListener("click", () => {
-      container.querySelectorAll(".filter-btn").forEach(b=>b.classList.remove("active"));
-      btn.classList.add("active");
-      state.filter = btn.dataset.filter;
-      renderList();
-    });
-  });
+// Before any AI is involved, we rank candidates on things we can measure for free:
+// - "openness": how far the leading price is from a lock (near 0% or 100% = little
+//   room for anyone, including Claude, to have found something the market missed)
+// - volume: real money behind a market is more meaningful than an empty one
+// - urgency: something closing soon is more actionable than something weeks out
+function heuristicScore(c){
+  const leadPrice = c.markets[0]?.price ?? 50;
+  const openness = 1 - Math.abs(leadPrice - 50) / 50; // 1 at 50%, 0 at 0%/100%
+  const totalVolume = c.markets.reduce((s,m)=>s+(m.volume||0),0);
+  const volumeScore = Math.min(Math.log10(totalVolume + 1) / 6, 1); // saturates around $1M
+  const hoursLeft = c.close_time ? Math.max((new Date(c.close_time) - Date.now()) / 3600000, 0.1) : 999;
+  const urgencyScore = Math.max(1 - hoursLeft / (24*14), 0); // full credit inside ~2 weeks, decays after
+  return openness * 0.5 + volumeScore * 0.35 + urgencyScore * 0.15;
 }
-renderCategoryFilters();
 
 async function fetchJSON(url){
   const res = await fetch(url);
@@ -295,26 +295,32 @@ async function runScan(){
       return { event_ticker: ev.event_ticker, title: ev.title || ev.event_ticker,
         category: ev.category || "Uncategorized", focus: classify(ev),
         close_time: markets[0]?.close_time || ev.close_time || null, markets };
-    }).filter(c=>c.markets.length>0).sort((a,b)=> new Date(a.close_time||0) - new Date(b.close_time||0));
-    state.candidates = normalized.slice(0,30);
+    }).filter(c=>c.markets.length>0);
+
+    const top5 = [...normalized].sort((a,b) => heuristicScore(b) - heuristicScore(a)).slice(0,5);
+    state.candidates = top5;
+    state.analysis = {};
     state.isDemo = false;
-    statusLine.textContent = `last scanned ${new Date().toLocaleTimeString()} · ${state.candidates.length} candidates found`;
+    statusLine.textContent = normalized.length
+      ? `scanned ${normalized.length} markets · showing top ${top5.length} worth a look`
+      : "";
     if (normalized.length === 0){
       errorBox.style.display = "block";
-      errorBox.textContent = "Scan succeeded but found no open weather/economic markets right now.";
+      errorBox.textContent = "Scan succeeded but found no open markets in the tracked categories right now.";
     }
   } catch (err){
     errorBox.style.display = "block";
     errorBox.textContent = `Couldn't reach the scanner's backend (${err.message}). If this is a fresh deploy, wait a minute and try again -- otherwise check the Vercel deployment logs.`;
     state.candidates = [];
   } finally {
-    scanBtn.disabled = false; scanBtn.textContent = "scan live markets";
+    scanBtn.disabled = false; scanBtn.textContent = "find top 5 bets →";
     renderList();
   }
 }
 
 function loadDemo(){
   state.candidates = DEMO_CANDIDATES;
+  state.analysis = {};
   state.isDemo = true;
   document.getElementById("errorBox").style.display = "none";
   document.getElementById("statusLine").textContent = `showing demo data · ${state.candidates.length} candidates`;
@@ -401,39 +407,27 @@ function renderTopPicks(){
 
 function renderList(){
   const container = document.getElementById("cardList");
-  let visible = state.candidates.filter(c => state.filter === "all" || c.focus === state.filter);
-
-  const sortRow = document.getElementById("sortRow");
   const batchRow = document.getElementById("batchRow");
-  sortRow.style.display = state.candidates.length ? "flex" : "none";
   batchRow.style.display = state.candidates.length ? "flex" : "none";
 
-  if (state.sortMode === "volume"){
-    visible = [...visible].sort((a,b) => (b.markets[0]?.volume||0) - (a.markets[0]?.volume||0));
-  } else if (state.sortMode === "edge"){
-    visible = [...visible].sort((a,b) => {
-      const sa = computeScore(state.analysis[a.event_ticker]?.data);
-      const sb = computeScore(state.analysis[b.event_ticker]?.data);
-      if (sa === null && sb === null) return 0;
-      if (sa === null) return 1;
-      if (sb === null) return -1;
-      return sb - sa;
-    });
-  } else {
-    visible = [...visible].sort((a,b) => new Date(a.close_time||0) - new Date(b.close_time||0));
-  }
+  // once things are researched, let the best edge float to the top automatically
+  const visible = [...state.candidates].sort((a,b) => {
+    const sa = computeScore(state.analysis[a.event_ticker]?.data);
+    const sb = computeScore(state.analysis[b.event_ticker]?.data);
+    if (sa === null && sb === null) return 0;
+    if (sa === null) return 1;
+    if (sb === null) return -1;
+    return sb - sa;
+  });
 
   renderTopPicks();
 
   if (visible.length === 0){
-    container.innerHTML = `<div class="empty-state">No candidates yet — scan live markets or view demo data above.</div>`;
+    container.innerHTML = `<div class="empty-state">Tap "find top 5 bets" above to scan live markets, or "view demo data" to try it with sample data first.</div>`;
     return;
   }
 
-  // figure out edge-sort rank for badge display (only meaningful in edge mode)
-  const edgeRanked = state.sortMode === "edge"
-    ? visible.filter(c => state.analysis[c.event_ticker]?.data && state.analysis[c.event_ticker].data.verdict === "possible_mispricing")
-    : [];
+  const edgeRanked = visible.filter(c => state.analysis[c.event_ticker]?.data?.verdict === "possible_mispricing");
 
   container.innerHTML = visible.map(c => {
     const a = state.analysis[c.event_ticker] || {};
@@ -526,14 +520,6 @@ document.getElementById("demoBtn").addEventListener("click", loadDemo);
 document.getElementById("keyToggleBtn").addEventListener("click", () => {
   document.getElementById("keyPanel").classList.toggle("visible");
 });
-document.querySelectorAll(".sort-btn").forEach(btn=>{
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".sort-btn").forEach(b=>b.classList.remove("active"));
-    btn.classList.add("active");
-    state.sortMode = btn.dataset.sort;
-    renderList();
-  });
-});
 
 document.getElementById("researchAllBtn").addEventListener("click", async () => {
   const apiKey = document.getElementById("apiKeyInput").value.trim();
@@ -542,8 +528,7 @@ document.getElementById("researchAllBtn").addEventListener("click", async () => 
     alert("Set your Anthropic API key first (panel just opened above).");
     return;
   }
-  const visible = state.candidates.filter(c => state.filter === "all" || c.focus === state.filter);
-  const toRun = visible.filter(c => !state.analysis[c.event_ticker]?.data);
+  const toRun = state.candidates.filter(c => !state.analysis[c.event_ticker]?.data);
   if (toRun.length === 0) return;
   if (!confirm(`This will run ${toRun.length} separate research calls against your Anthropic API key, each with a small cost. Continue?`)) return;
 
@@ -556,10 +541,6 @@ document.getElementById("researchAllBtn").addEventListener("click", async () => 
   }
   progress.textContent = `done — researched ${toRun.length} markets`;
   btn.disabled = false;
-  // auto-switch to edge sort so results surface immediately
-  document.querySelectorAll(".sort-btn").forEach(b=>b.classList.remove("active"));
-  document.querySelector('.sort-btn[data-sort="edge"]').classList.add("active");
-  state.sortMode = "edge";
   renderList();
 });
 

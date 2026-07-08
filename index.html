@@ -134,8 +134,6 @@
   .pick-title { font-weight: 600; font-size: 14.5px; margin: 3px 0 8px; line-height: 1.4; }
   .pick-meta { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); }
   .pick-why { font-size: 13px; line-height: 1.55; color: var(--text-secondary); margin-top: 8px; }
-  .batch-row { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
-  .batch-progress { font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); }
   .card.has-edge { border-color: rgba(52,211,153,0.35); }
   .card-rank-badge {
     display: inline-block; font-family: var(--font-mono); font-size: 10px; font-weight: 700;
@@ -171,9 +169,6 @@
     text-transform: uppercase; color: var(--text-secondary); margin: 18px 0 8px; padding-left: 2px;
   }
   .horizon-section .category-subhead:first-child { margin-top: 0; }
-  .select-row { display: flex; align-items: center; gap: 7px; margin-top: 13px; }
-  .select-row input[type="checkbox"] { accent-color: var(--green); width: 14px; height: 14px; cursor: pointer; }
-  .select-row label { font-size: 11px; color: var(--text-faint); cursor: pointer; }
 </style>
 </head>
 <body>
@@ -212,11 +207,6 @@
   </div>
 
   <div class="key-panel" id="historyPanel"></div>
-
-  <div class="batch-row" id="batchRow" style="display:none;">
-    <button id="researchAllBtn">research all →</button>
-    <span class="batch-progress" id="batchProgress"></span>
-  </div>
 
   <div class="status" id="statusLine"></div>
   <div class="error-box" id="errorBox" style="display:none;"></div>
@@ -308,7 +298,7 @@ const DEMO_CANDIDATES = [
 // state.groups is now nested: { daily: { weather: [...], econ: [...] }, weekly: {...}, ... }
 // so each time horizon can show its best candidates per category, instead of
 // one flat list where high-reliability categories crowd out the others.
-let state = { groups: { daily: {}, weekly: {}, monthly: {}, yearly: {} }, analysis: {}, selected: new Set(), horizonFilter: "all" };
+let state = { groups: { daily: {}, weekly: {}, monthly: {}, yearly: {} }, analysis: {}, horizonFilter: "all" };
 const SHORT_TERM_HORIZONS = ["daily", "weekly"];
 const LONG_TERM_HORIZONS = ["monthly", "yearly"];
 function horizonPassesFilter(horizonId){
@@ -504,7 +494,6 @@ async function runScan(){
 
     state.groups = groupIntoHorizons(normalized);
     state.analysis = {};
-    state.selected = new Set();
     const total = allCandidates().length;
 
     // Quick diagnostic breakdown -- shows how many raw matches were found per
@@ -550,7 +539,6 @@ async function runScan(){
 function loadDemo(){
   state.groups = groupIntoHorizons(DEMO_CANDIDATES);
   state.analysis = {};
-  state.selected = new Set();
   document.getElementById("errorBox").style.display = "none";
   document.getElementById("statusLine").textContent = `showing demo data · ${allCandidates().length} candidates`;
   renderList();
@@ -658,12 +646,7 @@ function renderCardHtml(c, rankIdx){
     <div class="title">${c.title}</div>
     ${bucketRowsHtml(c)}`;
   if (!a.data){
-    inner += `
-      <div class="select-row">
-        <input type="checkbox" class="select-checkbox" data-ticker="${c.event_ticker}" id="cb-${c.event_ticker}" ${state.selected.has(c.event_ticker)?"checked":""}>
-        <label for="cb-${c.event_ticker}">select for batch research</label>
-      </div>
-      <button class="research-btn" data-ticker="${c.event_ticker}" ${a.loading?"disabled":""}>${a.loading?"researching…":"research this market →"}</button>`;
+    inner += `<button class="research-btn" data-ticker="${c.event_ticker}" ${a.loading?"disabled":""}>${a.loading?"researching…":"research this market →"}</button>`;
   }
   if (a.error){
     inner += `<div style="margin-top:10px;font-family:var(--font-mono);font-size:11.5px;color:var(--red)">couldn't complete research: ${a.error}</div>`;
@@ -718,22 +701,6 @@ function renderSection(horizonId){
   container.querySelectorAll(".research-btn").forEach(btn=>{
     btn.addEventListener("click", () => analyzeCandidate(btn.dataset.ticker));
   });
-  container.querySelectorAll(".select-checkbox").forEach(cb=>{
-    cb.addEventListener("change", () => {
-      if (cb.checked) state.selected.add(cb.dataset.ticker);
-      else state.selected.delete(cb.dataset.ticker);
-      updateBatchButton();
-    });
-  });
-}
-
-function updateBatchButton(){
-  const total = allCandidates().length;
-  const selectedCount = state.selected.size;
-  document.getElementById("batchRow").style.display = total ? "flex" : "none";
-  document.getElementById("researchAllBtn").textContent = selectedCount > 0
-    ? `research selected (${selectedCount}) →`
-    : `research all ${total} →`;
 }
 
 function renderList(){
@@ -752,7 +719,6 @@ function renderList(){
   } else {
     emptyState.style.display = "none";
   }
-  updateBatchButton();
   renderTopPicks();
   HORIZON_DEFS.forEach(h => renderSection(h.id));
 }
@@ -795,7 +761,8 @@ Respond with ONLY raw JSON, no markdown fences, no commentary outside the JSON:
       },
       body: JSON.stringify({
         model: ANTHROPIC_MODEL,
-        max_tokens: 1200,
+        max_tokens: 4000, // raised from 1200 -- web search + reasoning before the JSON
+                           // could get cut off at the old limit, wasting the call
         messages: [{ role: "user", content: prompt }],
         tools: [{ type: "web_search_20250305", name: "web_search" }]
       })
@@ -805,11 +772,21 @@ Respond with ONLY raw JSON, no markdown fences, no commentary outside the JSON:
       throw new Error(`HTTP ${resp.status}: ${errText.slice(0,200)}`);
     }
     const data = await resp.json();
+    if (data.stop_reason === "max_tokens"){
+      throw new Error("response was cut off before finishing (hit token limit) -- try again");
+    }
     const text = (data.content||[]).map(b=>b.text||"").filter(Boolean).join("\n");
     const cleaned = text.replace(/```json|```/g,"").trim();
     const start = cleaned.indexOf("{"), end = cleaned.lastIndexOf("}");
-    if (start === -1 || end === -1) throw new Error("model did not return parseable JSON");
-    const parsed = JSON.parse(cleaned.slice(start, end+1));
+    if (start === -1 || end === -1){
+      throw new Error(`model did not return parseable JSON -- raw response started with: "${cleaned.slice(0,150)}"`);
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(cleaned.slice(start, end+1));
+    } catch (parseErr){
+      throw new Error(`couldn't parse the model's JSON (${parseErr.message}) -- raw: "${cleaned.slice(start, start+200)}"`);
+    }
     state.analysis[ticker] = { data: parsed };
     saveHistoryEntry(candidate, parsed);
   } catch (err){
@@ -877,34 +854,6 @@ document.querySelectorAll(".hfilter-btn").forEach(btn=>{
     state.horizonFilter = btn.dataset.hfilter;
     renderList();
   });
-});
-
-document.getElementById("researchAllBtn").addEventListener("click", async () => {
-  const apiKey = document.getElementById("apiKeyInput").value.trim();
-  if (!apiKey){
-    document.getElementById("keyPanel").classList.add("visible");
-    alert("Set your Anthropic API key first (panel just opened above).");
-    return;
-  }
-  const unresearched = allCandidates().filter(c => !state.analysis[c.event_ticker]?.data);
-  const toRun = state.selected.size > 0
-    ? unresearched.filter(c => state.selected.has(c.event_ticker))
-    : unresearched;
-  if (toRun.length === 0) return;
-  const label = state.selected.size > 0 ? "the markets you selected" : "every unresearched market currently shown";
-  if (!confirm(`This will run ${toRun.length} separate research calls against your Anthropic API key (${label}), each with a small cost. Continue?`)) return;
-
-  const btn = document.getElementById("researchAllBtn");
-  const progress = document.getElementById("batchProgress");
-  btn.disabled = true;
-  for (let i = 0; i < toRun.length; i++){
-    progress.textContent = `researching ${i+1} of ${toRun.length}…`;
-    await analyzeCandidate(toRun[i].event_ticker);
-  }
-  progress.textContent = `done — researched ${toRun.length} markets`;
-  btn.disabled = false;
-  state.selected = new Set();
-  renderList();
 });
 
 // --- crypto pulse: passive price/swing watch for the top 3 non-stablecoins ---

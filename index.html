@@ -563,8 +563,10 @@ function resultHtml(c, r){
   const left = Math.min(mp, mo), width = Math.max(Math.abs(mo-mp), 0.5);
   const barColor = mo >= mp ? "var(--green)" : "var(--red)";
   const risk = computeRisk(c, r);
-  const evCents = evCentsPerContract(r);
-  const evColor = evCents >= 0 ? "var(--green)" : "var(--red)";
+  const evYes = evCentsPerContract(r);
+  const evNo = -evYes;
+  const isSmallEdge = Math.abs(evYes) < 5;
+  const leadingLabel = r.leading_bucket || "yes";
   return `
     <div class="result-block">
       <div>
@@ -582,15 +584,19 @@ function resultHtml(c, r){
       ${r.source_url ? `<a class="source-link" href="${r.source_url}" target="_blank" rel="noopener noreferrer">source: ${r.source_title || r.source_url}</a>` : ""}
       <div class="rr-row">
         <div class="rr-item">
-          <div class="rr-label">est. value / $1 contract</div>
-          <div class="rr-value" style="color:${evColor}">${evCents >= 0 ? "+" : ""}${evCents}¢</div>
+          <div class="rr-label">yes (${leadingLabel})${evYes>=0?" ★":""}</div>
+          <div class="rr-value" style="color:${evYes>=0?'var(--green)':'var(--red)'}">${evYes>=0?"+":""}${evYes}¢</div>
+        </div>
+        <div class="rr-item">
+          <div class="rr-label">no${evNo>=0?" ★":""}</div>
+          <div class="rr-value" style="color:${evNo>=0?'var(--green)':'var(--red)'}">${evNo>=0?"+":""}${evNo}¢</div>
         </div>
         <div class="rr-item">
           <div class="rr-label">risk</div>
           <div class="rr-value" style="color:${risk.color}">${risk.label}</div>
         </div>
       </div>
-      <div class="rr-note">Value shown assumes the model's estimate is exactly right -- treat it as a best-case reference point, not a guarantee. Risk reflects confidence, how extreme the price is, and trading volume, not a statistical model.</div>
+      <div class="rr-note">★ marks the side the model favors. These two numbers always mirror each other -- it's the same disagreement viewed from both sides of the contract. ${isSmallEdge ? "This edge is under 5¢ either way -- likely just noise, not a real disagreement worth acting on." : "Value assumes the model's estimate is exactly right -- a best-case reference point, not a guarantee."} Risk reflects confidence, price extremity, and volume, not a statistical model.</div>
     </div>`;
 }
 

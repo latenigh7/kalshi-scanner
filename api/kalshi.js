@@ -425,7 +425,15 @@ function evCentsPerContract(r){
 
 async function fetchJSON(url){
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok){
+    let detail = "";
+    try {
+      const body = await res.json();
+      detail = body.error ? ` -- ${body.error}` : "";
+      if (body.upstream_status) detail += ` (upstream status ${body.upstream_status})`;
+    } catch (e) { /* body wasn't JSON, nothing more to add */ }
+    throw new Error(`HTTP ${res.status}${detail}`);
+  }
   return res.json();
 }
 
@@ -452,7 +460,7 @@ async function runScan(){
   scanBtn.disabled = true; scanBtn.textContent = "scanning…";
   errorBox.style.display = "none";
   try {
-    const data = await fetchJSON(`${KALSHI_BASE}?status=open&with_nested_markets=true&limit=200`);
+    const data = await fetchJSON(`${KALSHI_BASE}?status=open&with_nested_markets=true&limit=100`);
     const events = data.events || [];
     const normalized = events.filter(ev=>classify(ev)).map(ev=>{
       const markets = (ev.markets||[]).map(m=>({

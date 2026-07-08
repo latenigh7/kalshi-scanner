@@ -46,7 +46,15 @@
     padding: 2px 0 2px 14px; font-size: 12.5px; color: var(--text-secondary);
     line-height: 1.6; margin-bottom: 24px;
   }
-  .controls { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+  .controls { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; }
+  .controls .primary { padding: 13px 22px; font-size: 14px; border-radius: 10px; }
+  .secondary-links { margin-bottom: 20px; }
+  .link-btn {
+    background: none; border: none; padding: 0; color: var(--text-faint);
+    font-family: var(--font-display); font-size: 12px; font-weight: 500; text-decoration: underline;
+    text-decoration-color: var(--border-light); text-underline-offset: 3px; cursor: pointer;
+  }
+  .secondary-links .dot { color: var(--text-faint); margin: 0 8px; font-size: 12px; }
   button {
     font-family: var(--font-display); font-size: 12.5px; font-weight: 600; border-radius: 8px; cursor: pointer;
     padding: 9px 15px; border: 1px solid var(--border-light); background: var(--surface); color: var(--text-primary);
@@ -130,6 +138,31 @@
     display: inline-block; font-family: var(--font-mono); font-size: 10px; font-weight: 700;
     background: var(--green-dim); color: var(--green); border-radius: 5px; padding: 1px 7px; margin-right: 8px;
   }
+  .horizon-section { margin-bottom: 8px; }
+  .horizon-section:empty { display: none; }
+  .section-header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; margin-top: 22px; }
+  .section-header .eyebrow { margin-bottom: 0; }
+  .section-sub { font-size: 12px; color: var(--text-faint); }
+  .rr-row { display: flex; gap: 14px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .rr-item { flex: 1; }
+  .rr-label { font-family: var(--font-mono); font-size: 9.5px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.5px; }
+  .rr-value { font-family: var(--font-mono); font-size: 15px; font-weight: 700; margin-top: 3px; }
+  .rr-note { font-size: 10.5px; color: var(--text-faint); margin-top: 8px; line-height: 1.4; }
+  .history-row { padding: 10px 0; border-top: 1px solid var(--border); }
+  .history-row:first-child { border-top: none; }
+  .history-title { font-size: 13px; font-weight: 600; }
+  .history-meta { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); margin-top: 3px; }
+  .history-note { font-size: 11.5px; color: var(--text-faint); line-height: 1.5; margin-bottom: 10px; }
+  .crypto-pulse { display: flex; gap: 8px; margin-bottom: 22px; }
+  .coin-card {
+    flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 11px 13px; box-shadow: var(--shadow-card); position: relative; overflow: hidden;
+  }
+  .coin-card.swing { border-color: rgba(245,183,84,0.4); }
+  .coin-symbol { font-family: var(--font-mono); font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.5px; }
+  .coin-price { font-family: var(--font-mono); font-size: 15px; font-weight: 700; margin-top: 3px; }
+  .coin-change { font-family: var(--font-mono); font-size: 11px; font-weight: 600; margin-top: 2px; }
+  .coin-swing-flag { position: absolute; top: 8px; right: 10px; font-size: 13px; }
 </style>
 </head>
 <body>
@@ -141,6 +174,8 @@
     Decision support only — not a trading signal, not financial advice. Every "edge" below is an AI probability estimate weighed against the market price, not a proven or backtested model. Verify before you trade.
   </div>
 
+  <div class="crypto-pulse" id="cryptoPulse"></div>
+
   <div class="key-panel" id="keyPanel">
     <label for="apiKeyInput">Anthropic API key (used only in this browser tab, never saved or sent anywhere but api.anthropic.com)</label>
     <input type="password" id="apiKeyInput" placeholder="sk-ant-...">
@@ -148,43 +183,88 @@
   </div>
 
   <div class="controls">
-    <button class="primary" id="scanBtn">scan live markets</button>
-    <button id="demoBtn">view demo data</button>
-    <button id="keyToggleBtn">set api key</button>
+    <button class="primary" id="scanBtn">find top bets →</button>
+  </div>
+  <div class="secondary-links">
+    <button id="demoBtn" class="link-btn">view demo data</button>
+    <span class="dot">·</span>
+    <button id="keyToggleBtn" class="link-btn">set api key</button>
+    <span class="dot">·</span>
+    <button id="historyToggleBtn" class="link-btn">view history</button>
   </div>
 
-  <div class="controls" id="categoryFilters"></div>
+  <div class="key-panel" id="historyPanel"></div>
 
   <div class="batch-row" id="batchRow" style="display:none;">
-    <button id="researchAllBtn">research all visible →</button>
+    <button id="researchAllBtn">research all →</button>
     <span class="batch-progress" id="batchProgress"></span>
-  </div>
-
-  <div class="sort-row" id="sortRow" style="display:none;">
-    <span class="sort-label">sort:</span>
-    <button class="sort-btn active" data-sort="closing">closing soon</button>
-    <button class="sort-btn" data-sort="volume">highest volume</button>
-    <button class="sort-btn" data-sort="edge">best edge</button>
   </div>
 
   <div class="status" id="statusLine"></div>
   <div class="error-box" id="errorBox" style="display:none;"></div>
   <div class="top-picks" id="topPicks"></div>
-  <div id="cardList"></div>
+
+  <div class="horizon-section" id="section-daily">
+    <div class="section-header"><span class="eyebrow">daily</span><span class="section-sub">closing today or tomorrow</span></div>
+    <div id="cardList-daily"></div>
+  </div>
+  <div class="horizon-section" id="section-weekly">
+    <div class="section-header"><span class="eyebrow">weekly</span><span class="section-sub">closing within about a week</span></div>
+    <div id="cardList-weekly"></div>
+  </div>
+  <div class="horizon-section" id="section-monthly">
+    <div class="section-header"><span class="eyebrow">monthly</span><span class="section-sub">closing within a few weeks</span></div>
+    <div id="cardList-monthly"></div>
+  </div>
+  <div class="horizon-section" id="section-yearly">
+    <div class="section-header"><span class="eyebrow">long-term</span><span class="section-sub">closing in months or years</span></div>
+    <div id="cardList-yearly"></div>
+  </div>
+
+  <div id="emptyState" class="empty-state" style="display:none;">Tap "find top bets" above to scan live markets, or "view demo data" to try it with sample data first.</div>
 </div>
 
 <script>
 const KALSHI_BASE = "/api/kalshi"; // our own serverless function, not Kalshi directly
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_MODEL = "claude-sonnet-5";
+const HISTORY_KEY = "kalshi_scanner_history_v1";
+
 // Each category here is checked against a Kalshi event's category + title.
-// To add a new category later, just add another entry to this list.
+// "reliability" is a rough, honest judgment call -- not a measured fact --
+// about how consistently good public information exists to check a market
+// against. Weather forecasts and scheduled econ data are dependable; political
+// and crypto "will X happen" questions are hit-or-miss depending on the topic.
+// This nudges the free pre-filter toward markets more likely to reward the
+// (paid) research step, without pretending to know for certain in advance.
 const CATEGORY_DEFS = [
-  { id: "weather", label: "weather", keys: ["weather","climate","temperature"] },
-  { id: "econ", label: "econ", keys: ["econom","financ","fed","cpi","inflation","jobs","payroll","gdp","rate decision","unemployment"] },
-  { id: "politics", label: "politics", keys: ["politic","election","senate","congress","president","governor","legislat"] },
-  { id: "crypto", label: "crypto", keys: ["crypto","bitcoin","ethereum","btc","eth "] },
+  { id: "weather", label: "weather", keys: ["weather","climate","temperature"], reliability: 1.0 },
+  { id: "econ", label: "econ", keys: ["econom","financ","fed","cpi","inflation","jobs","payroll","gdp","rate decision","unemployment"], reliability: 1.0 },
+  { id: "politics", label: "politics", keys: ["politic","election","senate","congress","president","governor","legislat"], reliability: 0.7 },
+  { id: "crypto", label: "crypto", keys: ["crypto","bitcoin","ethereum","btc","eth "], reliability: 0.65 },
 ];
+function categoryReliability(focusId){
+  const def = CATEGORY_DEFS.find(d => d.id === focusId);
+  return def ? def.reliability : 0.75;
+}
+
+// Four time horizons -- a same-day weather bet, a next-week econ release, a
+// month-out Fed decision, and a year-out political race all call for very
+// different kinds of attention.
+const HORIZON_DEFS = [
+  { id: "daily", maxHours: 30 },
+  { id: "weekly", maxHours: 24 * 8 },
+  { id: "monthly", maxHours: 24 * 40 },
+  { id: "yearly", maxHours: Infinity },
+];
+function timeHorizon(closeTimeIso){
+  if (!closeTimeIso) return "yearly";
+  const hoursLeft = (new Date(closeTimeIso) - Date.now()) / 3600000;
+  for (const h of HORIZON_DEFS){
+    if (hoursLeft <= h.maxHours) return h.id;
+  }
+  return "yearly";
+}
 
 const DEMO_CANDIDATES = [
   { event_ticker:"DEMO-NYC-HIGH", title:"Highest temperature in NYC today?", category:"Climate", focus:"weather",
@@ -196,12 +276,21 @@ const DEMO_CANDIDATES = [
   { event_ticker:"DEMO-LA-HIGH", title:"Highest temperature in LA today?", category:"Climate", focus:"weather",
     close_time: new Date(Date.now()+4*3600*1000).toISOString(),
     markets:[{label:"74° to 75°",price:99,volume:747073},{label:"70° to 71°",price:1,volume:8000}] },
+  { event_ticker:"DEMO-JOBLESS", title:"Weekly jobless claims -- above or below 230K?", category:"Economics", focus:"econ",
+    close_time: new Date(Date.now()+5*24*3600*1000).toISOString(),
+    markets:[{label:"Below 230K",price:62,volume:150000},{label:"230K or above",price:38,volume:95000}] },
   { event_ticker:"DEMO-FED", title:"Fed rate decision this meeting?", category:"Economics", focus:"econ",
-    close_time: new Date(Date.now()+30*24*3600*1000).toISOString(),
+    close_time: new Date(Date.now()+20*24*3600*1000).toISOString(),
     markets:[{label:"No change",price:78,volume:2100000},{label:"25bp cut",price:20,volume:900000},{label:"25bp hike",price:2,volume:40000}] },
+  { event_ticker:"DEMO-RECESSION", title:"Will the US enter a recession by end of next year?", category:"Economics", focus:"econ",
+    close_time: new Date(Date.now()+400*24*3600*1000).toISOString(),
+    markets:[{label:"No recession",price:71,volume:3200000},{label:"Recession declared",price:29,volume:1100000}] },
 ];
 
-let state = { candidates: [], filter: "all", analysis: {}, sortMode: "closing" };
+let state = { groups: { daily: [], weekly: [], monthly: [], yearly: [] }, analysis: {} };
+function allCandidates(){
+  return [...state.groups.daily, ...state.groups.weekly, ...state.groups.monthly, ...state.groups.yearly];
+}
 
 const CONFIDENCE_WEIGHT = { high: 1, medium: 0.65, low: 0.35 };
 
@@ -226,6 +315,23 @@ function getVolume(m){
   }
   return 0;
 }
+// Kalshi's API has used a few different field names for close time across
+// endpoints/versions. Try the market-level ones first, then fall back to
+// whatever the parent event carries, so a missing field on one doesn't
+// silently produce a blank or wrong closing time.
+function getCloseTime(m, ev){
+  const candidates = [
+    m.close_time, m.expiration_time, m.latest_expiration_time, m.expected_expiration_time,
+    ev.close_time, ev.expiration_time, ev.latest_expiration_time,
+  ];
+  for (const c of candidates){
+    if (c){
+      const d = new Date(c);
+      if (!isNaN(d.getTime())) return c;
+    }
+  }
+  return null;
+}
 function classify(ev){
   const cat=(ev.category||"").toLowerCase(), title=(ev.title||"").toLowerCase();
   for (const def of CATEGORY_DEFS){
@@ -239,12 +345,19 @@ function formatMultiplier(price){
   if (mult >= 100) return Math.round(mult) + "x";
   return mult.toFixed(mult >= 10 ? 1 : 2) + "x";
 }
+function formatVolume(v){
+  if (v == null) return "0";
+  if (v >= 1000000) return (v/1000000).toFixed(1).replace(/\.0$/,"") + "M";
+  if (v >= 1000) return (v/1000).toFixed(1).replace(/\.0$/,"") + "K";
+  return String(v);
+}
 function timeUntil(iso){
-  if (!iso) return "—";
+  if (!iso) return "unknown close time";
   const diff = new Date(iso).getTime() - Date.now();
-  if (isNaN(diff)) return "—";
+  if (isNaN(diff)) return "unknown close time";
   if (diff <= 0) return "closing";
   const hrs = Math.floor(diff/3600000), mins = Math.floor((diff%3600000)/60000);
+  if (hrs >= 24*365) return `${Math.floor(hrs/(24*365))}y`;
   if (hrs >= 48) return `${Math.floor(hrs/24)}d`;
   if (hrs >= 1) return `${hrs}h ${mins}m`;
   return `${mins}m`;
@@ -255,27 +368,59 @@ function verdictColor(v){
   return "var(--text-secondary)";
 }
 
-function renderCategoryFilters(){
-  const container = document.getElementById("categoryFilters");
-  const buttons = [{ id: "all", label: "all" }, ...CATEGORY_DEFS];
-  container.innerHTML = buttons.map(b =>
-    `<button class="filter-btn${state.filter===b.id?" active":""}" data-filter="${b.id}">${b.label}</button>`
-  ).join("");
-  container.querySelectorAll(".filter-btn").forEach(btn=>{
-    btn.addEventListener("click", () => {
-      container.querySelectorAll(".filter-btn").forEach(b=>b.classList.remove("active"));
-      btn.classList.add("active");
-      state.filter = btn.dataset.filter;
-      renderList();
-    });
-  });
+// Before any AI is involved, we rank candidates within each time-horizon group
+// on things we can measure for free:
+// - "openness": how far the leading price is from a lock (near 0% or 100% means
+//   little room for anyone, including Claude, to have found something missed)
+// - volume: real money behind a market is more meaningful than an empty one
+// - reliability: a modest boost/penalty based on how checkable the category
+//   tends to be (see CATEGORY_DEFS above)
+function heuristicScore(c){
+  const leadPrice = c.markets[0]?.price ?? 50;
+  const openness = 1 - Math.abs(leadPrice - 50) / 50; // 1 at 50%, 0 at 0%/100%
+  const totalVolume = c.markets.reduce((s,m)=>s+(m.volume||0),0);
+  const volumeScore = Math.min(Math.log10(totalVolume + 1) / 6, 1); // saturates around $1M
+  const base = openness * 0.6 + volumeScore * 0.4;
+  return base * categoryReliability(c.focus);
 }
-renderCategoryFilters();
+
+// Simple, transparent risk read -- not a statistical model, just flags for
+// low confidence, longshot/near-lock pricing, and thin volume, any of which
+// make a result harder to trust or actually trade.
+function computeRisk(candidate, r){
+  let points = 0;
+  if (r.confidence === "low") points += 2;
+  else if (r.confidence === "medium") points += 1;
+  const price = r.market_price_pct ?? 50;
+  if (price <= 10 || price >= 90) points += 1;
+  const totalVolume = candidate.markets.reduce((s,m)=>s+(m.volume||0),0);
+  if (totalVolume < 5000) points += 2;
+  else if (totalVolume < 50000) points += 1;
+  if (points >= 4) return { label: "high", color: "var(--red)" };
+  if (points >= 2) return { label: "medium", color: "var(--amber)" };
+  return { label: "low", color: "var(--green)" };
+}
+// Expected value per $1-payout contract, in cents, if the model's probability
+// is exactly right. This is just the edge expressed in dollar terms.
+function evCentsPerContract(r){
+  return Math.round((r.model_probability_pct ?? 0) - (r.market_price_pct ?? 0));
+}
 
 async function fetchJSON(url){
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
+}
+
+function groupIntoHorizons(candidates){
+  const groups = { daily: [], weekly: [], monthly: [], yearly: [] };
+  for (const c of candidates){
+    groups[timeHorizon(c.close_time)].push(c);
+  }
+  for (const key of Object.keys(groups)){
+    groups[key] = groups[key].sort((a,b) => heuristicScore(b) - heuristicScore(a)).slice(0,5);
+  }
+  return groups;
 }
 
 async function runScan(){
@@ -290,42 +435,39 @@ async function runScan(){
     const normalized = events.filter(ev=>classify(ev)).map(ev=>{
       const markets = (ev.markets||[]).map(m=>({
         ticker: m.ticker, label: m.yes_sub_title || m.subtitle || m.ticker,
-        price: getPrice(m), volume: getVolume(m), close_time: m.close_time || ev.close_time,
+        price: getPrice(m), volume: getVolume(m), close_time: getCloseTime(m, ev),
       })).filter(m=>m.price!==null).sort((a,b)=>b.price-a.price);
       return { event_ticker: ev.event_ticker, title: ev.title || ev.event_ticker,
         category: ev.category || "Uncategorized", focus: classify(ev),
-        close_time: markets[0]?.close_time || ev.close_time || null, markets };
-    }).filter(c=>c.markets.length>0).sort((a,b)=> new Date(a.close_time||0) - new Date(b.close_time||0));
-    state.candidates = normalized.slice(0,30);
-    state.isDemo = false;
-    statusLine.textContent = `last scanned ${new Date().toLocaleTimeString()} · ${state.candidates.length} candidates found`;
+        close_time: markets[0]?.close_time || getCloseTime({}, ev), markets };
+    }).filter(c=>c.markets.length>0);
+
+    state.groups = groupIntoHorizons(normalized);
+    state.analysis = {};
+    const total = allCandidates().length;
+    statusLine.textContent = normalized.length
+      ? `scanned ${normalized.length} markets · showing top ${total} across all time horizons`
+      : "";
     if (normalized.length === 0){
       errorBox.style.display = "block";
-      errorBox.textContent = "Scan succeeded but found no open weather/economic markets right now.";
+      errorBox.textContent = "Scan succeeded but found no open markets in the tracked categories right now.";
     }
   } catch (err){
     errorBox.style.display = "block";
     errorBox.textContent = `Couldn't reach the scanner's backend (${err.message}). If this is a fresh deploy, wait a minute and try again -- otherwise check the Vercel deployment logs.`;
-    state.candidates = [];
+    state.groups = { daily: [], weekly: [], monthly: [], yearly: [] };
   } finally {
-    scanBtn.disabled = false; scanBtn.textContent = "scan live markets";
+    scanBtn.disabled = false; scanBtn.textContent = "find top bets →";
     renderList();
   }
 }
 
 function loadDemo(){
-  state.candidates = DEMO_CANDIDATES;
-  state.isDemo = true;
+  state.groups = groupIntoHorizons(DEMO_CANDIDATES);
+  state.analysis = {};
   document.getElementById("errorBox").style.display = "none";
-  document.getElementById("statusLine").textContent = `showing demo data · ${state.candidates.length} candidates`;
+  document.getElementById("statusLine").textContent = `showing demo data · ${allCandidates().length} candidates`;
   renderList();
-}
-
-function formatVolume(v){
-  if (v == null) return "0";
-  if (v >= 1000000) return (v/1000000).toFixed(1).replace(/\.0$/,"") + "M";
-  if (v >= 1000) return (v/1000).toFixed(1).replace(/\.0$/,"") + "K";
-  return String(v);
 }
 
 function bucketRowsHtml(c){
@@ -346,6 +488,9 @@ function resultHtml(c, r){
   const mp = r.market_price_pct ?? 0, mo = r.model_probability_pct ?? 0;
   const left = Math.min(mp, mo), width = Math.max(Math.abs(mo-mp), 0.5);
   const barColor = mo >= mp ? "var(--green)" : "var(--red)";
+  const risk = computeRisk(c, r);
+  const evCents = evCentsPerContract(r);
+  const evColor = evCents >= 0 ? "var(--green)" : "var(--red)";
   return `
     <div class="result-block">
       <div>
@@ -361,12 +506,24 @@ function resultHtml(c, r){
       <div class="assessment">${r.assessment || ""}</div>
       ${r.key_stat ? `<div class="key-stat">${r.key_stat}</div>` : ""}
       ${r.source_url ? `<a class="source-link" href="${r.source_url}" target="_blank" rel="noopener noreferrer">source: ${r.source_title || r.source_url}</a>` : ""}
+      <div class="rr-row">
+        <div class="rr-item">
+          <div class="rr-label">est. value / $1 contract</div>
+          <div class="rr-value" style="color:${evColor}">${evCents >= 0 ? "+" : ""}${evCents}¢</div>
+        </div>
+        <div class="rr-item">
+          <div class="rr-label">risk</div>
+          <div class="rr-value" style="color:${risk.color}">${risk.label}</div>
+        </div>
+      </div>
+      <div class="rr-note">Value shown assumes the model's estimate is exactly right -- treat it as a best-case reference point, not a guarantee. Risk reflects confidence, how extreme the price is, and trading volume, not a statistical model.</div>
     </div>`;
 }
 
 function renderTopPicks(){
   const container = document.getElementById("topPicks");
-  const scored = state.candidates
+  const all = allCandidates();
+  const scored = all
     .map(c => ({ c, r: state.analysis[c.event_ticker]?.data, score: computeScore(state.analysis[c.event_ticker]?.data) }))
     .filter(x => x.r && x.score !== null && x.r.verdict === "possible_mispricing")
     .sort((a,b) => b.score - a.score)
@@ -380,7 +537,7 @@ function renderTopPicks(){
   container.innerHTML = `
     <div class="top-picks-header">
       <span class="eyebrow">top picks</span>
-      <span class="pick-meta">ranked by edge × confidence</span>
+      <span class="pick-meta">ranked by edge × confidence, across every time horizon</span>
     </div>
     ${scored.map((x,i) => {
       const barColor = x.r.model_probability_pct >= x.r.market_price_pct ? "var(--green)" : "var(--red)";
@@ -399,70 +556,73 @@ function renderTopPicks(){
   `;
 }
 
-function renderList(){
-  const container = document.getElementById("cardList");
-  let visible = state.candidates.filter(c => state.filter === "all" || c.focus === state.filter);
+function reliabilityDot(focusId){
+  const rel = categoryReliability(focusId);
+  const color = rel >= 0.9 ? "var(--green)" : rel >= 0.75 ? "var(--amber)" : "var(--text-faint)";
+  const title = rel >= 0.9 ? "reliable public info typically available" : rel >= 0.75 ? "moderately checkable" : "mixed / less consistently checkable";
+  return `<span title="${title}" style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${color};margin-right:6px;"></span>`;
+}
 
-  const sortRow = document.getElementById("sortRow");
-  const batchRow = document.getElementById("batchRow");
-  sortRow.style.display = state.candidates.length ? "flex" : "none";
-  batchRow.style.display = state.candidates.length ? "flex" : "none";
-
-  if (state.sortMode === "volume"){
-    visible = [...visible].sort((a,b) => (b.markets[0]?.volume||0) - (a.markets[0]?.volume||0));
-  } else if (state.sortMode === "edge"){
-    visible = [...visible].sort((a,b) => {
-      const sa = computeScore(state.analysis[a.event_ticker]?.data);
-      const sb = computeScore(state.analysis[b.event_ticker]?.data);
-      if (sa === null && sb === null) return 0;
-      if (sa === null) return 1;
-      if (sb === null) return -1;
-      return sb - sa;
-    });
-  } else {
-    visible = [...visible].sort((a,b) => new Date(a.close_time||0) - new Date(b.close_time||0));
+function renderCardHtml(c, rankIdx){
+  const a = state.analysis[c.event_ticker] || {};
+  const hasEdge = a.data && a.data.verdict === "possible_mispricing";
+  const totalVolume = c.markets.reduce((sum,m) => sum + (m.volume||0), 0);
+  let inner = `
+    <div class="tag">${rankIdx > -1 ? `<span class="card-rank-badge">#${rankIdx+1}</span>` : ""}${reliabilityDot(c.focus)}${c.category} · closes ${timeUntil(c.close_time)} · $${formatVolume(totalVolume)} vol · ${c.markets.length} markets</div>
+    <div class="title">${c.title}</div>
+    ${bucketRowsHtml(c)}`;
+  if (!a.data){
+    inner += `<button class="research-btn" data-ticker="${c.event_ticker}" ${a.loading?"disabled":""}>${a.loading?"researching…":"research this market →"}</button>`;
   }
+  if (a.error){
+    inner += `<div style="margin-top:10px;font-family:var(--font-mono);font-size:11.5px;color:var(--red)">couldn't complete research: ${a.error}</div>`;
+  }
+  if (a.data){
+    inner += resultHtml(c, a.data);
+  }
+  return `<div class="card${hasEdge ? " has-edge" : ""}">${inner}</div>`;
+}
 
-  renderTopPicks();
+function renderSection(horizonId){
+  const section = document.getElementById(`section-${horizonId}`);
+  const container = document.getElementById(`cardList-${horizonId}`);
+  const candidates = state.groups[horizonId] || [];
 
-  if (visible.length === 0){
-    container.innerHTML = `<div class="empty-state">No candidates yet — scan live markets or view demo data above.</div>`;
+  if (candidates.length === 0){
+    section.style.display = "none";
+    container.innerHTML = "";
     return;
   }
+  section.style.display = "block";
 
-  // figure out edge-sort rank for badge display (only meaningful in edge mode)
-  const edgeRanked = state.sortMode === "edge"
-    ? visible.filter(c => state.analysis[c.event_ticker]?.data && state.analysis[c.event_ticker].data.verdict === "possible_mispricing")
-    : [];
+  const sorted = [...candidates].sort((a,b) => {
+    const sa = computeScore(state.analysis[a.event_ticker]?.data);
+    const sb = computeScore(state.analysis[b.event_ticker]?.data);
+    if (sa === null && sb === null) return 0;
+    if (sa === null) return 1;
+    if (sb === null) return -1;
+    return sb - sa;
+  });
+  const edgeRanked = sorted.filter(c => state.analysis[c.event_ticker]?.data?.verdict === "possible_mispricing");
 
-  container.innerHTML = visible.map(c => {
-    const a = state.analysis[c.event_ticker] || {};
-    const rankIdx = edgeRanked.indexOf(c);
-    const hasEdge = a.data && a.data.verdict === "possible_mispricing";
-    const totalVolume = c.markets.reduce((sum,m) => sum + (m.volume||0), 0);
-    let inner = `
-      <div class="tag">${rankIdx > -1 ? `<span class="card-rank-badge">#${rankIdx+1}</span>` : ""}${c.category} · closes ${timeUntil(c.close_time)} · $${formatVolume(totalVolume)} vol · ${c.markets.length} markets</div>
-      <div class="title">${c.title}</div>
-      ${bucketRowsHtml(c)}`;
-    if (!a.data){
-      inner += `<button class="research-btn" data-ticker="${c.event_ticker}" ${a.loading?"disabled":""}>${a.loading?"researching…":"research this market →"}</button>`;
-    }
-    if (a.error){
-      inner += `<div style="margin-top:10px;font-family:var(--font-mono);font-size:11.5px;color:var(--red)">couldn't complete research: ${a.error}</div>`;
-    }
-    if (a.data){
-      inner += resultHtml(c, a.data);
-    }
-    return `<div class="card${hasEdge ? " has-edge" : ""}">${inner}</div>`;
-  }).join("");
-
+  container.innerHTML = sorted.map(c => renderCardHtml(c, edgeRanked.indexOf(c))).join("");
   container.querySelectorAll(".research-btn").forEach(btn=>{
     btn.addEventListener("click", () => analyzeCandidate(btn.dataset.ticker));
   });
 }
 
+function renderList(){
+  const total = allCandidates().length;
+  document.getElementById("batchRow").style.display = total ? "flex" : "none";
+  document.getElementById("researchAllBtn").textContent = `research all ${total} →`;
+  document.getElementById("emptyState").style.display = total ? "none" : "block";
+
+  renderTopPicks();
+  HORIZON_DEFS.forEach(h => renderSection(h.id));
+}
+
 async function analyzeCandidate(ticker){
-  const candidate = state.candidates.find(c => c.event_ticker === ticker);
+  const candidate = allCandidates().find(c => c.event_ticker === ticker);
   if (!candidate) return;
   const apiKey = document.getElementById("apiKeyInput").value.trim();
   if (!apiKey){
@@ -515,10 +675,53 @@ Respond with ONLY raw JSON, no markdown fences, no commentary outside the JSON:
     if (start === -1 || end === -1) throw new Error("model did not return parseable JSON");
     const parsed = JSON.parse(cleaned.slice(start, end+1));
     state.analysis[ticker] = { data: parsed };
+    saveHistoryEntry(candidate, parsed);
   } catch (err){
     state.analysis[ticker] = { error: err.message };
   }
   renderList();
+}
+
+// --- local history log (kept in this browser only, via localStorage) ---
+function loadHistory(){
+  try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]"); } catch (e) { return []; }
+}
+function saveHistoryEntry(candidate, r){
+  const history = loadHistory();
+  history.unshift({
+    ticker: candidate.event_ticker,
+    title: candidate.title,
+    researched_at: new Date().toISOString(),
+    close_time: candidate.close_time,
+    market_price_pct: r.market_price_pct,
+    model_probability_pct: r.model_probability_pct,
+    verdict: r.verdict,
+    confidence: r.confidence,
+  });
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0,200)));
+}
+function renderHistoryPanel(){
+  const panel = document.getElementById("historyPanel");
+  const history = loadHistory();
+  if (history.length === 0){
+    panel.innerHTML = `<div class="empty-state" style="padding:4px 0;">No researched picks logged yet -- every market you research is saved here automatically, in this browser only.</div>`;
+    return;
+  }
+  panel.innerHTML = `
+    <div class="history-note">Logged automatically when you research a market. Outcomes aren't checked automatically -- once a market closes, compare its final result to what's logged here to see how the call actually held up.</div>
+    ${history.map(h => `
+      <div class="history-row">
+        <div class="history-title">${h.title}</div>
+        <div class="history-meta">${new Date(h.researched_at).toLocaleDateString()} · market ${h.market_price_pct}% vs model ${h.model_probability_pct}% · ${h.verdict} · closes ${timeUntil(h.close_time)}</div>
+      </div>`).join("")}
+    <button id="clearHistoryBtn" style="margin-top:12px;">clear history</button>
+  `;
+  document.getElementById("clearHistoryBtn").addEventListener("click", () => {
+    if (confirm("Clear all logged research history? This can't be undone.")){
+      localStorage.removeItem(HISTORY_KEY);
+      renderHistoryPanel();
+    }
+  });
 }
 
 document.getElementById("scanBtn").addEventListener("click", runScan);
@@ -526,13 +729,10 @@ document.getElementById("demoBtn").addEventListener("click", loadDemo);
 document.getElementById("keyToggleBtn").addEventListener("click", () => {
   document.getElementById("keyPanel").classList.toggle("visible");
 });
-document.querySelectorAll(".sort-btn").forEach(btn=>{
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".sort-btn").forEach(b=>b.classList.remove("active"));
-    btn.classList.add("active");
-    state.sortMode = btn.dataset.sort;
-    renderList();
-  });
+document.getElementById("historyToggleBtn").addEventListener("click", () => {
+  const panel = document.getElementById("historyPanel");
+  panel.classList.toggle("visible");
+  if (panel.classList.contains("visible")) renderHistoryPanel();
 });
 
 document.getElementById("researchAllBtn").addEventListener("click", async () => {
@@ -542,8 +742,7 @@ document.getElementById("researchAllBtn").addEventListener("click", async () => 
     alert("Set your Anthropic API key first (panel just opened above).");
     return;
   }
-  const visible = state.candidates.filter(c => state.filter === "all" || c.focus === state.filter);
-  const toRun = visible.filter(c => !state.analysis[c.event_ticker]?.data);
+  const toRun = allCandidates().filter(c => !state.analysis[c.event_ticker]?.data);
   if (toRun.length === 0) return;
   if (!confirm(`This will run ${toRun.length} separate research calls against your Anthropic API key, each with a small cost. Continue?`)) return;
 
@@ -556,12 +755,40 @@ document.getElementById("researchAllBtn").addEventListener("click", async () => 
   }
   progress.textContent = `done — researched ${toRun.length} markets`;
   btn.disabled = false;
-  // auto-switch to edge sort so results surface immediately
-  document.querySelectorAll(".sort-btn").forEach(b=>b.classList.remove("active"));
-  document.querySelector('.sort-btn[data-sort="edge"]').classList.add("active");
-  state.sortMode = "edge";
   renderList();
 });
+
+// --- crypto pulse: passive price/swing watch for the top 3 non-stablecoins ---
+const COIN_LABELS = { bitcoin: "BTC", ethereum: "ETH", solana: "SOL" };
+const SWING_THRESHOLD_PCT = 4; // 24h move past this is flagged as worth checking the chart
+
+async function fetchCryptoPulse(){
+  const container = document.getElementById("cryptoPulse");
+  try {
+    const data = await fetchJSON("/api/crypto");
+    container.innerHTML = Object.keys(COIN_LABELS).map(id => {
+      const info = data[id];
+      if (!info) return "";
+      const price = info.usd;
+      const change = info.usd_24h_change;
+      const isSwing = Math.abs(change) >= SWING_THRESHOLD_PCT;
+      const changeColor = change >= 0 ? "var(--green)" : "var(--red)";
+      return `
+        <div class="coin-card${isSwing ? " swing" : ""}">
+          ${isSwing ? `<span class="coin-swing-flag" title="24h move past ${SWING_THRESHOLD_PCT}% -- worth checking the chart">⚡</span>` : ""}
+          <div class="coin-symbol">${COIN_LABELS[id]}</div>
+          <div class="coin-price">$${price >= 1000 ? Math.round(price).toLocaleString() : price.toFixed(2)}</div>
+          <div class="coin-change" style="color:${changeColor}">${change >= 0 ? "+" : ""}${change.toFixed(1)}% 24h</div>
+        </div>`;
+    }).join("");
+  } catch (err){
+    // quiet failure -- this is a secondary passive widget, not core to the research flow
+    container.innerHTML = `<div style="font-size:11px;color:var(--text-faint);">crypto pulse unavailable right now</div>`;
+  }
+}
+
+fetchCryptoPulse();
+setInterval(fetchCryptoPulse, 60000); // refresh every 60s while the tab is open, no cost
 
 renderList();
 </script>

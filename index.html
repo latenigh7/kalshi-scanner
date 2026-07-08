@@ -163,6 +163,14 @@
   .coin-price { font-family: var(--font-mono); font-size: 15px; font-weight: 700; margin-top: 3px; }
   .coin-change { font-family: var(--font-mono); font-size: 11px; font-weight: 600; margin-top: 2px; }
   .coin-swing-flag { position: absolute; top: 8px; right: 10px; font-size: 13px; }
+  .category-subhead {
+    font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; letter-spacing: 0.6px;
+    text-transform: uppercase; color: var(--text-secondary); margin: 18px 0 8px; padding-left: 2px;
+  }
+  .horizon-section .category-subhead:first-child { margin-top: 0; }
+  .select-row { display: flex; align-items: center; gap: 7px; margin-top: 13px; }
+  .select-row input[type="checkbox"] { accent-color: var(--green); width: 14px; height: 14px; cursor: pointer; }
+  .select-row label { font-size: 11px; color: var(--text-faint); cursor: pointer; }
 </style>
 </head>
 <body>
@@ -287,9 +295,18 @@ const DEMO_CANDIDATES = [
     markets:[{label:"No recession",price:71,volume:3200000},{label:"Recession declared",price:29,volume:1100000}] },
 ];
 
-let state = { groups: { daily: [], weekly: [], monthly: [], yearly: [] }, analysis: {} };
+// state.groups is now nested: { daily: { weather: [...], econ: [...] }, weekly: {...}, ... }
+// so each time horizon can show its best candidates per category, instead of
+// one flat list where high-reliability categories crowd out the others.
+let state = { groups: { daily: {}, weekly: {}, monthly: {}, yearly: {} }, analysis: {}, selected: new Set() };
 function allCandidates(){
-  return [...state.groups.daily, ...state.groups.weekly, ...state.groups.monthly, ...state.groups.yearly];
+  const out = [];
+  for (const h of Object.keys(state.groups)){
+    for (const cat of Object.keys(state.groups[h])){
+      out.push(...state.groups[h][cat]);
+    }
+  }
+  return out;
 }
 
 const CONFIDENCE_WEIGHT = { high: 1, medium: 0.65, low: 0.35 };
@@ -408,17 +425,30 @@ function evCentsPerContract(r){
 
 async function fetchJSON(url){
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok){
+    let detail = "";
+    try {
+      const body = await res.json();
+      detail = body.error ? ` -- ${body.error}` : "";
+      if (body.upstream_status) detail += ` (upstream status ${body.upstream_status})`;
+    } catch (e) { /* body wasn't JSON, nothing more to add */ }
+    throw new Error(`HTTP ${res.status}${detail}`);
+  }
   return res.json();
 }
 
 function groupIntoHorizons(candidates){
-  const groups = { daily: [], weekly: [], monthly: [], yearly: [] };
+  const groups = { daily: {}, weekly: {}, monthly: {}, yearly: {} };
   for (const c of candidates){
-    groups[timeHorizon(c.close_time)].push(c);
+    const h = timeHorizon(c.close_time);
+    const cat = c.focus || "other";
+    if (!groups[h][cat]) groups[h][cat] = [];
+    groups[h][cat].push(c);
   }
-  for (const key of Object.keys(groups)){
-    groups[key] = groups[key].sort((a,b) => heuristicScore(b) - heuristicScore(a)).slice(0,5);
+  for (const h of Object.keys(groups)){
+    for (const cat of Object.keys(groups[h])){
+      groups[h][cat] = groups[h][cat].sort((a,b) => heuristicScore(b) - heuristicScore(a)).slice(0,5);
+    }
   }
   return groups;
 }
@@ -444,9 +474,10 @@ async function runScan(){
 
     state.groups = groupIntoHorizons(normalized);
     state.analysis = {};
+    state.selected = new Set();
     const total = allCandidates().length;
     statusLine.textContent = normalized.length
-      ? `scanned ${normalized.length} markets · showing top ${total} across all time horizons`
+      ? `scanned ${normalized.length} markets · showing top ${total} across all time horizons and categories`
       : "";
     if (normalized.length === 0){
       errorBox.style.display = "block";
@@ -455,7 +486,7 @@ async function runScan(){
   } catch (err){
     errorBox.style.display = "block";
     errorBox.textContent = `Couldn't reach the scanner's backend (${err.message}). If this is a fresh deploy, wait a minute and try again -- otherwise check the Vercel deployment logs.`;
-    state.groups = { daily: [], weekly: [], monthly: [], yearly: [] };
+    state.groups = { daily: {}, weekly: {}, monthly: {}, yearly: {} };
   } finally {
     scanBtn.disabled = false; scanBtn.textContent = "find top bets →";
     renderList();
@@ -465,6 +496,7 @@ async function runScan(){
 function loadDemo(){
   state.groups = groupIntoHorizons(DEMO_CANDIDATES);
   state.analysis = {};
+  state.selected = new Set();
   document.getElementById("errorBox").style.display = "none";
   document.getElementById("statusLine").textContent = `showing demo data · ${allCandidates().length} candidates`;
   renderList();
@@ -572,7 +604,12 @@ function renderCardHtml(c, rankIdx){
     <div class="title">${c.title}</div>
     ${bucketRowsHtml(c)}`;
   if (!a.data){
-    inner += `<button class="research-btn" data-ticker="${c.event_ticker}" ${a.loading?"disabled":""}>${a.loading?"researching…":"research this market →"}</button>`;
+    inner += `
+      <div class="select-row">
+        <input type="checkbox" class="select-checkbox" data-ticker="${c.event_ticker}" id="cb-${c.event_ticker}" ${state.selected.has(c.event_ticker)?"checked":""}>
+        <label for="cb-${c.event_ticker}">select for batch research</label>
+      </div>
+      <button class="research-btn" data-ticker="${c.event_ticker}" ${a.loading?"disabled":""}>${a.loading?"researching…":"research this market →"}</button>`;
   }
   if (a.error){
     inner += `<div style="margin-top:10px;font-family:var(--font-mono);font-size:11.5px;color:var(--red)">couldn't complete research: ${a.error}</div>`;
@@ -583,19 +620,8 @@ function renderCardHtml(c, rankIdx){
   return `<div class="card${hasEdge ? " has-edge" : ""}">${inner}</div>`;
 }
 
-function renderSection(horizonId){
-  const section = document.getElementById(`section-${horizonId}`);
-  const container = document.getElementById(`cardList-${horizonId}`);
-  const candidates = state.groups[horizonId] || [];
-
-  if (candidates.length === 0){
-    section.style.display = "none";
-    container.innerHTML = "";
-    return;
-  }
-  section.style.display = "block";
-
-  const sorted = [...candidates].sort((a,b) => {
+function sortByEdgeThenHeuristic(candidates){
+  return [...candidates].sort((a,b) => {
     const sa = computeScore(state.analysis[a.event_ticker]?.data);
     const sb = computeScore(state.analysis[b.event_ticker]?.data);
     if (sa === null && sb === null) return 0;
@@ -603,20 +629,55 @@ function renderSection(horizonId){
     if (sb === null) return -1;
     return sb - sa;
   });
-  const edgeRanked = sorted.filter(c => state.analysis[c.event_ticker]?.data?.verdict === "possible_mispricing");
+}
 
-  container.innerHTML = sorted.map(c => renderCardHtml(c, edgeRanked.indexOf(c))).join("");
+function renderSection(horizonId){
+  const section = document.getElementById(`section-${horizonId}`);
+  const container = document.getElementById(`cardList-${horizonId}`);
+  const catGroups = state.groups[horizonId] || {};
+  const catIds = Object.keys(catGroups).filter(cat => catGroups[cat].length > 0);
+
+  if (catIds.length === 0){
+    section.style.display = "none";
+    container.innerHTML = "";
+    return;
+  }
+  section.style.display = "block";
+
+  container.innerHTML = catIds.map(catId => {
+    const sorted = sortByEdgeThenHeuristic(catGroups[catId]);
+    const edgeRanked = sorted.filter(c => state.analysis[c.event_ticker]?.data?.verdict === "possible_mispricing");
+    const catLabel = CATEGORY_DEFS.find(d=>d.id===catId)?.label || catId;
+    return `
+      <div class="category-subhead">${catLabel}</div>
+      ${sorted.map(c => renderCardHtml(c, edgeRanked.indexOf(c))).join("")}
+    `;
+  }).join("");
+
   container.querySelectorAll(".research-btn").forEach(btn=>{
     btn.addEventListener("click", () => analyzeCandidate(btn.dataset.ticker));
   });
+  container.querySelectorAll(".select-checkbox").forEach(cb=>{
+    cb.addEventListener("change", () => {
+      if (cb.checked) state.selected.add(cb.dataset.ticker);
+      else state.selected.delete(cb.dataset.ticker);
+      updateBatchButton();
+    });
+  });
+}
+
+function updateBatchButton(){
+  const total = allCandidates().length;
+  const selectedCount = state.selected.size;
+  document.getElementById("batchRow").style.display = total ? "flex" : "none";
+  document.getElementById("researchAllBtn").textContent = selectedCount > 0
+    ? `research selected (${selectedCount}) →`
+    : `research all ${total} →`;
 }
 
 function renderList(){
-  const total = allCandidates().length;
-  document.getElementById("batchRow").style.display = total ? "flex" : "none";
-  document.getElementById("researchAllBtn").textContent = `research all ${total} →`;
-  document.getElementById("emptyState").style.display = total ? "none" : "block";
-
+  document.getElementById("emptyState").style.display = allCandidates().length ? "none" : "block";
+  updateBatchButton();
   renderTopPicks();
   HORIZON_DEFS.forEach(h => renderSection(h.id));
 }
@@ -742,9 +803,13 @@ document.getElementById("researchAllBtn").addEventListener("click", async () => 
     alert("Set your Anthropic API key first (panel just opened above).");
     return;
   }
-  const toRun = allCandidates().filter(c => !state.analysis[c.event_ticker]?.data);
+  const unresearched = allCandidates().filter(c => !state.analysis[c.event_ticker]?.data);
+  const toRun = state.selected.size > 0
+    ? unresearched.filter(c => state.selected.has(c.event_ticker))
+    : unresearched;
   if (toRun.length === 0) return;
-  if (!confirm(`This will run ${toRun.length} separate research calls against your Anthropic API key, each with a small cost. Continue?`)) return;
+  const label = state.selected.size > 0 ? "the markets you selected" : "every unresearched market currently shown";
+  if (!confirm(`This will run ${toRun.length} separate research calls against your Anthropic API key (${label}), each with a small cost. Continue?`)) return;
 
   const btn = document.getElementById("researchAllBtn");
   const progress = document.getElementById("batchProgress");
@@ -755,6 +820,7 @@ document.getElementById("researchAllBtn").addEventListener("click", async () => 
   }
   progress.textContent = `done — researched ${toRun.length} markets`;
   btn.disabled = false;
+  state.selected = new Set();
   renderList();
 });
 

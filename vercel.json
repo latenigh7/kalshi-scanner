@@ -1,6 +1,6 @@
 {
   "functions": {
-    "api/kalshi.js": { "maxDuration": 20 },
+    "api/kalshi.js": { "maxDuration": 45 },
     "api/crypto.js": { "maxDuration": 20 }
   }
 }

@@ -8,51 +8,73 @@ export default async function handler(req, res) {
     return;
   }
 
-  try {
-    const params = new URLSearchParams(req.query).toString();
-    const url = `https://external-api.kalshi.com/trade-api/v2/events?${params}`;
+  const PAGE_LIMIT = 200; // Kalshi's max per page
+  const MAX_PAGES = 4; // pulls up to ~800 events total, so short-term markets aren't
+                        // missed just because they weren't in the very first page
 
-    // Give Kalshi a hard deadline shorter than the function's own max duration,
-    // so a slow upstream response fails as a clean JSON error instead of
-    // letting the platform kill the whole function (which shows a generic
-    // crash page with no useful detail).
+  async function fetchOnePage(cursor) {
+    const params = new URLSearchParams(req.query);
+    params.set('limit', String(PAGE_LIMIT));
+    if (cursor) params.set('cursor', cursor);
+    else params.delete('cursor');
+    const url = `https://external-api.kalshi.com/trade-api/v2/events?${params.toString()}`;
+
+    // Give each page a hard deadline shorter than the function's own max
+    // duration, so a slow upstream response fails cleanly instead of letting
+    // the platform kill the whole function with a generic crash page.
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-    let kalshiResponse;
+    const timeout = setTimeout(() => controller.abort(), 8000);
     try {
-      kalshiResponse = await fetch(url, { signal: controller.signal });
+      const kalshiResponse = await fetch(url, { signal: controller.signal });
+      const rawText = await kalshiResponse.text();
+      let data;
+      try {
+        data = JSON.parse(rawText);
+      } catch (parseErr) {
+        console.error('Kalshi returned non-JSON response:', kalshiResponse.status, rawText.slice(0, 300));
+        return { ok: false, status: kalshiResponse.status, error: 'non-JSON response', snippet: rawText.slice(0, 300) };
+      }
+      if (!kalshiResponse.ok) {
+        console.error('Kalshi returned an error status:', kalshiResponse.status, data);
+        return { ok: false, status: kalshiResponse.status, data };
+      }
+      return { ok: true, data };
     } catch (fetchErr) {
       if (fetchErr.name === 'AbortError') {
-        res.status(504).json({ error: 'Kalshi took too long to respond (timed out after 15s).' });
-        return;
+        return { ok: false, error: 'timed out after 8s' };
       }
-      throw fetchErr;
+      return { ok: false, error: fetchErr.message };
     } finally {
       clearTimeout(timeout);
     }
+  }
 
-    const rawText = await kalshiResponse.text();
+  try {
+    let allEvents = [];
+    let cursor = undefined;
+    let pagesFetched = 0;
 
-    let data;
-    try {
-      data = JSON.parse(rawText);
-    } catch (parseErr) {
-      // Kalshi didn't return JSON (could be an HTML error page, rate-limit
-      // notice, etc). Surface the raw body so this is diagnosable instead of
-      // just failing silently with a generic 500.
-      console.error('Kalshi returned non-JSON response:', kalshiResponse.status, rawText.slice(0, 500));
-      res.status(502).json({
-        error: 'Kalshi returned a non-JSON response',
-        upstream_status: kalshiResponse.status,
-        upstream_body_snippet: rawText.slice(0, 300),
-      });
-      return;
+    for (let i = 0; i < MAX_PAGES; i++) {
+      const result = await fetchOnePage(cursor);
+      pagesFetched++;
+      if (!result.ok) {
+        // If we already collected some events from earlier pages, return
+        // those rather than failing the whole request over one bad page.
+        if (allEvents.length > 0) break;
+        res.status(result.status || 502).json({
+          error: result.error || 'Failed to reach Kalshi',
+          upstream_status: result.status,
+          upstream_body_snippet: result.snippet,
+        });
+        return;
+      }
+      const events = result.data.events || [];
+      allEvents = allEvents.concat(events);
+      cursor = result.data.cursor;
+      if (!cursor || events.length === 0) break;
     }
 
-    if (!kalshiResponse.ok) {
-      console.error('Kalshi returned an error status:', kalshiResponse.status, data);
-    }
-    res.status(kalshiResponse.status).json(data);
+    res.status(200).json({ events: allEvents, pages_fetched: pagesFetched });
   } catch (err) {
     console.error('kalshi.js function error:', err);
     res.status(500).json({ error: err.message || 'Failed to reach Kalshi from the server.' });

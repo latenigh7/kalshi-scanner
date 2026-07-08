@@ -493,8 +493,23 @@ async function runScan(){
     state.analysis = {};
     state.selected = new Set();
     const total = allCandidates().length;
-    statusLine.textContent = normalized.length
-      ? `scanned ${normalized.length} markets · showing top ${total} across all time horizons and categories`
+
+    // Quick diagnostic breakdown -- shows how many raw matches were found per
+    // category before the top-5-per-bucket cap, and how many landed in each
+    // time horizon, so a category or horizon coming up empty is visible
+    // immediately instead of requiring console digging.
+    const catCounts = {};
+    const horizonCounts = { daily: 0, weekly: 0, monthly: 0, yearly: 0 };
+    for (const c of normalized){
+      const cat = c.focus || "unmatched";
+      catCounts[cat] = (catCounts[cat] || 0) + 1;
+      horizonCounts[timeHorizon(c.close_time)]++;
+    }
+    const catSummary = CATEGORY_DEFS.map(d => `${d.label} ${catCounts[d.id] || 0}`).join(" · ");
+    const horizonSummary = Object.entries(horizonCounts).map(([h,n]) => `${h} ${n}`).join(" · ");
+
+    statusLine.innerHTML = normalized.length
+      ? `scanned ${data.pages_fetched || "?"} pages / ${normalized.length} matched markets · showing top ${total}<br>matched by category: ${catSummary}<br>matched by horizon: ${horizonSummary}`
       : "";
     if (normalized.length === 0){
       errorBox.style.display = "block";

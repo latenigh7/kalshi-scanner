@@ -455,8 +455,21 @@ async function fetchJSON(url){
 }
 
 function groupIntoHorizons(candidates){
+  // Pick the best 15 overall for short-term (daily+weekly) and the best 15
+  // for long-term (monthly+yearly), letting categories compete directly for
+  // those slots based on the same reliability-weighted score -- rather than
+  // capping each category individually, which could starve slots that go
+  // unused elsewhere.
+  const withHorizon = candidates.map(c => ({ c, h: timeHorizon(c.close_time) }));
+  const shortCandidates = withHorizon.filter(x => SHORT_TERM_HORIZONS.includes(x.h)).map(x => x.c);
+  const longCandidates = withHorizon.filter(x => LONG_TERM_HORIZONS.includes(x.h)).map(x => x.c);
+
+  const topShort = [...shortCandidates].sort((a,b) => heuristicScore(b) - heuristicScore(a)).slice(0,15);
+  const topLong = [...longCandidates].sort((a,b) => heuristicScore(b) - heuristicScore(a)).slice(0,15);
+  const selected = [...topShort, ...topLong];
+
   const groups = { daily: {}, weekly: {}, monthly: {}, yearly: {} };
-  for (const c of candidates){
+  for (const c of selected){
     const h = timeHorizon(c.close_time);
     const cat = c.focus || "other";
     if (!groups[h][cat]) groups[h][cat] = [];
@@ -464,7 +477,7 @@ function groupIntoHorizons(candidates){
   }
   for (const h of Object.keys(groups)){
     for (const cat of Object.keys(groups[h])){
-      groups[h][cat] = groups[h][cat].sort((a,b) => heuristicScore(b) - heuristicScore(a)).slice(0,5);
+      groups[h][cat] = groups[h][cat].sort((a,b) => heuristicScore(b) - heuristicScore(a));
     }
   }
   return groups;
@@ -508,8 +521,17 @@ async function runScan(){
     const catSummary = CATEGORY_DEFS.map(d => `${d.label} ${catCounts[d.id] || 0}`).join(" · ");
     const horizonSummary = Object.entries(horizonCounts).map(([h,n]) => `${h} ${n}`).join(" · ");
 
+    // Show a few actual weather-matched titles + their raw close_time, so we
+    // can see directly whether they're really same-day markets or something
+    // longer-horizon that just happens to mention "weather"/"climate".
+    const weatherSample = normalized
+      .filter(c => c.focus === "weather")
+      .slice(0, 5)
+      .map(c => `"${c.title}" → close_time: ${c.close_time || "MISSING"} (bucketed as ${timeHorizon(c.close_time)})`)
+      .join("<br>");
+
     statusLine.innerHTML = normalized.length
-      ? `scanned ${data.pages_fetched || "?"} pages / ${normalized.length} matched markets · showing top ${total}<br>matched by category: ${catSummary}<br>matched by horizon: ${horizonSummary}`
+      ? `scanned ${data.pages_fetched || "?"} pages / ${normalized.length} matched markets · showing top ${total}<br>matched by category: ${catSummary}<br>matched by horizon: ${horizonSummary}<br><br>weather sample:<br>${weatherSample || "(none matched)"}`
       : "";
     if (normalized.length === 0){
       errorBox.style.display = "block";
